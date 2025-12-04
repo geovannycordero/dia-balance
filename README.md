@@ -2,6 +2,12 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
+Node version
+
+```bash
+v24.11.1
+```
+
 First, run the development server:
 
 ```bash
@@ -19,6 +25,24 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+
+## Linting & Formatting
+
+This project uses ESLint (flat config) and Prettier.
+
+```bash
+# Lint only
+yarn lint
+
+# Lint and auto-fix (plus format with Prettier)
+yarn lint:fix
+
+# Format the codebase with Prettier
+yarn format
+
+# Check formatting without writing changes
+yarn format:check
+```
 
 ## Learn More
 
