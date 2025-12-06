@@ -1,5 +1,20 @@
 @import 'tailwindcss';
 
+/* Fix for mobile select dropdowns appearing in wrong position */
+@supports (-webkit-touch-callout: none) {
+  /* iOS Safari */
+  select {
+    -webkit-appearance: none;
+  }
+}
+
+/* Ensure selects in modals render correctly on mobile */
+select {
+  -webkit-tap-highlight-color: transparent;
+}
+
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
