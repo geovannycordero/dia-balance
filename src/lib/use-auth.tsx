@@ -1,7 +1,7 @@
 'use client';
 
-import { useMemo } from 'react';
 import { signOut, useSession } from 'next-auth/react';
+import { useMemo } from 'react';
 
 export function useAuth() {
   const { data: session, status } = useSession();
@@ -27,4 +27,3 @@ export function useAuth() {
     logout,
   };
 }
-

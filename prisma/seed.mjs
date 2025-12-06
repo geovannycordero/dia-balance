@@ -1,6 +1,15 @@
+import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient();
+const url = process.env.DATABASE_URL;
+
+if (!url) {
+  throw new Error('DATABASE_URL is not set for seeding');
+}
+
+const adapter = new PrismaPg({ connectionString: url });
+
+const prisma = new PrismaClient({ adapter });
 
 async function main() {
   const demoEmail = 'demo@diabalance.local';
@@ -53,7 +62,7 @@ async function main() {
 }
 
 main()
-  .catch(e => {
+  .catch((e) => {
     console.error(e);
     process.exit(1);
   })

@@ -19,30 +19,29 @@ enum ActionType {
 }
 
 model User {
-  id          String   @id @default(cuid())
-  email       String   @unique
+  id          String  @id @default(uuid())
+  email       String  @unique
   name        String?
-  isActive    Boolean  @default(true)
-  isVerified  Boolean  @default(false)
-  preferences Json?
+  isActive    Boolean @default(true)
+  isVerified  Boolean @default(false)
 
   actions   Action[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
 
   // NextAuth fields
-  emailVerified DateTime?
+  emailVerified DateTime? @db.Timestamptz
   image         String?
   accounts      Account[]
   sessions      Session[]
 }
 
 model Action {
-  id        String     @id @default(cuid())
+  id        String     @id @default(uuid())
   userId    String
-  user      User       @relation(fields: [userId], references: [id])
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   type      ActionType
-  timestamp DateTime   @default(now())
+  timestamp DateTime   @default(now()) @db.Timestamptz
 
   // Common fields
   notes String?
@@ -74,8 +73,8 @@ model Action {
 
   hydrationAmount Float?
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
 
   @@index([userId, timestamp])
   @@index([userId, type])
@@ -83,7 +82,7 @@ model Action {
 
 // NextAuth models
 model Account {
-  id                String  @id @default(cuid())
+  id                String  @id @default(uuid())
   userId            String
   type              String
   provider          String
@@ -102,10 +101,10 @@ model Account {
 }
 
 model Session {
-  id           String   @id @default(cuid())
+  id           String   @id @default(uuid())
   sessionToken String   @unique
   userId       String
-  expires      DateTime
+  expires      DateTime @db.Timestamptz
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("sessions")
@@ -114,9 +113,8 @@ model Session {
 model VerificationToken {
   identifier String
   token      String   @unique
-  expires    DateTime
+  expires    DateTime @db.Timestamptz
 
   @@unique([identifier, token])
   @@map("verification_tokens")
 }
-

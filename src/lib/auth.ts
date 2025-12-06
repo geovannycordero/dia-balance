@@ -1,10 +1,11 @@
 import { PrismaAdapter } from '@next-auth/prisma-adapter';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import EmailProvider, { type EmailConfig } from 'next-auth/providers/email';
-import type { NextAuthOptions } from 'next-auth';
 import { Resend } from 'resend';
 
 import { prisma } from '@/lib/prisma';
+
+import type { NextAuthOptions } from 'next-auth';
 
 // Simple dev email provider: log codes to console instead of sending
 function createDevEmailProvider(config: EmailConfig) {
@@ -25,7 +26,7 @@ function createDevEmailProvider(config: EmailConfig) {
       // Dev-friendly: log code instead of sending real email
       // eslint-disable-next-line no-console
       console.log(
-        `[DEV EMAIL] Verification code for ${normalizedEmail}: ${code}`,
+        `\x1b[33m[DEV EMAIL]\x1b[0m Verification code for ${normalizedEmail}: ${code}\x1b[0m`,
       );
     },
   });
@@ -85,7 +86,6 @@ export const authOptions: NextAuthOptions = {
             });
 
             if (error) {
-              // eslint-disable-next-line no-console
               console.error('Resend error:', error);
               throw new Error(`Failed to send email: ${error.message}`);
             }
@@ -115,11 +115,7 @@ export const authOptions: NextAuthOptions = {
           });
 
           if (!verificationToken) {
-            // eslint-disable-next-line no-console
-            console.error(
-              'Invalid or expired verification code for:',
-              normalizedEmail,
-            );
+            console.error('Invalid or expired verification code for:', normalizedEmail);
             return null;
           }
 
@@ -134,7 +130,6 @@ export const authOptions: NextAuthOptions = {
           });
 
           if (!user?.isActive) {
-            // eslint-disable-next-line no-console
             console.error('User not found or inactive:', normalizedEmail);
             return null;
           }
@@ -149,7 +144,6 @@ export const authOptions: NextAuthOptions = {
             email: user.email,
           };
         } catch (error) {
-          // eslint-disable-next-line no-console
           console.error('Credentials provider error:', error);
           return null;
         }
@@ -170,6 +164,7 @@ export const authOptions: NextAuthOptions = {
       return token;
     },
     async session({ session, token }) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       if (session.user && (token as any).userId) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (session.user as any).id = (token as any).userId;
@@ -187,7 +182,6 @@ export const authOptions: NextAuthOptions = {
 
       const isAllowed = existingUser?.isActive ?? false;
       if (!isAllowed) {
-        // eslint-disable-next-line no-console
         console.error('SignIn: user not found or inactive', email);
       }
       return isAllowed;
@@ -198,8 +192,5 @@ export const authOptions: NextAuthOptions = {
     verifyRequest: '/auth/verify-request',
     error: '/auth/error',
   },
-  debug:
-    process.env.NODE_ENV === 'development' ||
-    process.env.NEXTAUTH_DEBUG === 'true',
+  debug: process.env.NODE_ENV === 'development' || process.env.NEXTAUTH_DEBUG === 'true',
 };
-

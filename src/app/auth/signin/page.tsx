@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
-import { signIn } from 'next-auth/react';
 import { Loader2, Mail, ArrowLeft, CheckCircle } from 'lucide-react';
+import { signIn } from 'next-auth/react';
+import { useState } from 'react';
 
 export default function SignInPage() {
   const [email, setEmail] = useState('');
@@ -40,22 +40,19 @@ export default function SignInPage() {
       });
 
       if (result?.error) {
-        // eslint-disable-next-line no-console
         console.error('Error requesting code', result.error);
-        setError(
-          'Unable to send verification code. Please check your email and try again.',
-        );
+        setError('Unable to send verification code. Please check your email and try again.');
       } else {
-        setSuccess(
-          'Verification code sent. Please check your email and enter the 6-digit code.',
-        );
+        setSuccess('Verification code sent. Please check your email and enter the 6-digit code.');
         setStep('code');
-        setTimeout(() => {
-          setIsCodeExpired(true);
-        }, 8 * 60 * 1000);
+        setTimeout(
+          () => {
+            setIsCodeExpired(true);
+          },
+          8 * 60 * 1000,
+        );
       }
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.error('Unexpected error requesting code', err);
       setError('Something went wrong. Please try again.');
     } finally {
@@ -92,9 +89,8 @@ export default function SignInPage() {
       });
 
       if (result?.error) {
-        // eslint-disable-next-line no-console
         console.error('Error verifying code', result.error);
-        setCodeAttempts(prev => prev + 1);
+        setCodeAttempts((prev) => prev + 1);
 
         if (result.error.includes('CredentialsSignin')) {
           setError('Invalid or expired code. Please try again.');
@@ -111,7 +107,6 @@ export default function SignInPage() {
         setError('Unexpected error during sign-in. Please try again.');
       }
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.error('Unexpected error verifying code', err);
       setError('Something went wrong. Please try again.');
     } finally {
@@ -131,6 +126,8 @@ export default function SignInPage() {
   const handleResendCode = async () => {
     if (!email) return;
 
+    const normalizedEmail = email.trim().toLowerCase();
+
     setIsLoading(true);
     setError('');
     setSuccess('');
@@ -139,7 +136,7 @@ export default function SignInPage() {
 
     try {
       const result = await signIn('email', {
-        email,
+        email: normalizedEmail,
         redirect: false,
       });
 
@@ -147,12 +144,14 @@ export default function SignInPage() {
         setError('Unable to resend verification code. Please try again.');
       } else {
         setSuccess('New verification code sent.');
-        setTimeout(() => {
-          setIsCodeExpired(true);
-        }, 8 * 60 * 1000);
+        setTimeout(
+          () => {
+            setIsCodeExpired(true);
+          },
+          8 * 60 * 1000,
+        );
       }
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.error('Unexpected error resending code', err);
       setError('Unable to resend code. Please try again.');
     } finally {
@@ -161,16 +160,16 @@ export default function SignInPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-950 px-4 py-8 text-slate-50">
-      <div className="w-full max-w-md rounded-3xl bg-slate-900/70 p-8 shadow-xl ring-1 ring-slate-800">
+    <div className="flex min-h-screen items-center justify-center bg-white px-4 py-8 text-slate-900 dark:bg-slate-950 dark:text-slate-50">
+      <div className="w-full max-w-md rounded-3xl bg-white p-8 shadow-xl ring-1 ring-slate-200 dark:bg-slate-900/70 dark:ring-slate-800">
         <header className="mb-6 text-center">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-400">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-600 dark:text-sky-400">
             Dia Balance
           </p>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight">
+          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-50">
             Sign in with a magic code
           </h1>
-          <p className="mt-1 text-sm text-slate-400">
+          <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
             Enter your email to receive a one-time login code.
           </p>
         </header>
@@ -180,7 +179,7 @@ export default function SignInPage() {
             <div className="space-y-2">
               <label
                 htmlFor="email"
-                className="block text-sm font-medium text-slate-200"
+                className="block text-sm font-medium text-slate-700 dark:text-slate-200"
               >
                 Email
               </label>
@@ -188,25 +187,25 @@ export default function SignInPage() {
                 id="email"
                 type="email"
                 autoComplete="email"
-                className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none ring-sky-500/60 focus:border-sky-500 focus:ring-2"
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none ring-sky-500/60 focus:border-sky-500 focus:ring-2 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
                 placeholder="you@example.com"
                 value={email}
-                onChange={e => setEmail(e.target.value)}
+                onChange={(e) => setEmail(e.target.value)}
                 disabled={isLoading}
               />
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-slate-600 dark:text-slate-500">
                 Only pre-approved email addresses can sign in.
               </p>
             </div>
 
             {error && (
-              <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
+              <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-700 dark:text-rose-200">
                 {error}
               </div>
             )}
 
             {success && (
-              <div className="flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">
+              <div className="flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-200">
                 <CheckCircle className="h-4 w-4" />
                 <span>{success}</span>
               </div>
@@ -214,7 +213,7 @@ export default function SignInPage() {
 
             <button
               type="submit"
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-sky-500 px-4 py-2 text-sm font-medium text-slate-950 shadow-lg shadow-sky-500/30 transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:bg-slate-700"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-sky-500 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-sky-500/30 transition hover:bg-sky-600 disabled:cursor-not-allowed disabled:bg-slate-400 dark:hover:bg-sky-400 dark:disabled:bg-slate-700"
               disabled={isLoading || !email.trim()}
             >
               {isLoading ? (
@@ -237,7 +236,7 @@ export default function SignInPage() {
             <div className="space-y-2">
               <label
                 htmlFor="code"
-                className="block text-sm font-medium text-slate-200"
+                className="block text-sm font-medium text-slate-700 dark:text-slate-200"
               >
                 Verification code
               </label>
@@ -246,36 +245,34 @@ export default function SignInPage() {
                 type="text"
                 inputMode="numeric"
                 pattern="[0-9]*"
-                className={`w-full rounded-xl border bg-slate-900 px-3 py-2 text-center text-2xl tracking-[0.35em] outline-none ring-sky-500/60 focus:ring-2 ${
+                className={`w-full rounded-xl border bg-white px-3 py-2 text-center text-2xl tracking-[0.35em] text-slate-900 outline-none ring-sky-500/60 focus:ring-2 dark:bg-slate-900 dark:text-slate-100 ${
                   isCodeExpired
                     ? 'border-rose-500'
-                    : 'border-slate-700 focus:border-sky-500'
+                    : 'border-slate-300 focus:border-sky-500 dark:border-slate-700'
                 }`}
                 placeholder="000000"
                 value={code}
-                onChange={e =>
-                  setCode(e.target.value.replace(/\D/g, '').slice(0, 6))
-                }
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                 maxLength={6}
                 disabled={isLoading || codeAttempts >= 3}
               />
-              <div className="space-y-1 text-center text-xs text-slate-400">
+              <div className="space-y-1 text-center text-xs text-slate-600 dark:text-slate-400">
                 <p>
                   Enter the 6-digit code sent to{' '}
-                  <span className="font-medium text-slate-100">{email}</span>.
+                  <span className="font-medium text-slate-900 dark:text-slate-100">{email}</span>.
                 </p>
                 {isCodeExpired && (
-                  <p className="font-medium text-rose-300">
+                  <p className="font-medium text-rose-600 dark:text-rose-300">
                     Code expired. Please request a new one.
                   </p>
                 )}
                 {codeAttempts > 0 && codeAttempts < 3 && (
-                  <p className="text-amber-300">
+                  <p className="text-amber-600 dark:text-amber-300">
                     {3 - codeAttempts} attempts remaining.
                   </p>
                 )}
                 {codeAttempts >= 3 && (
-                  <p className="font-medium text-rose-300">
+                  <p className="font-medium text-rose-600 dark:text-rose-300">
                     Too many failed attempts. Please request a new code.
                   </p>
                 )}
@@ -283,13 +280,13 @@ export default function SignInPage() {
             </div>
 
             {error && (
-              <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
+              <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-700 dark:text-rose-200">
                 {error}
               </div>
             )}
 
             {success && (
-              <div className="flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">
+              <div className="flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-200">
                 <CheckCircle className="h-4 w-4" />
                 <span>{success}</span>
               </div>
@@ -298,7 +295,7 @@ export default function SignInPage() {
             <div className="space-y-3">
               <button
                 type="submit"
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-sky-500 px-4 py-2 text-sm font-medium text-slate-950 shadow-lg shadow-sky-500/30 transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:bg-slate-700"
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-sky-500 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-sky-500/30 transition hover:bg-sky-600 disabled:cursor-not-allowed disabled:bg-slate-400 dark:hover:bg-sky-400 dark:disabled:bg-slate-700"
                 disabled={isLoading || code.length !== 6 || codeAttempts >= 3}
               >
                 {isLoading ? (
@@ -315,7 +312,7 @@ export default function SignInPage() {
                 <button
                   type="button"
                   onClick={handleBackToEmail}
-                  className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-medium text-slate-200 hover:bg-slate-800"
+                  className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
                   disabled={isLoading}
                 >
                   <ArrowLeft className="h-3 w-3" />
@@ -324,7 +321,7 @@ export default function SignInPage() {
                 <button
                   type="button"
                   onClick={handleResendCode}
-                  className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-transparent px-3 py-2 text-xs font-medium text-slate-300 hover:text-sky-300"
+                  className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-transparent px-3 py-2 text-xs font-medium text-slate-600 hover:text-sky-600 dark:text-slate-300 dark:hover:text-sky-300"
                   disabled={isLoading}
                 >
                   {isLoading && <Loader2 className="h-3 w-3 animate-spin" />}
@@ -338,4 +335,3 @@ export default function SignInPage() {
     </div>
   );
 }
-

@@ -36,7 +36,7 @@ Create a mobile-first, responsive web application for diabetes management that a
     - Insulin vs. Blood Glucose over time
     - Exercise impact on glucose levels
     - Food intake patterns with glucose responses
-    - All together 
+    - All together
   - **Medication Adherence**: Calendar view showing consistency
   - **Sleep Quality Trends**: Bar chart with glucose correlation
   - **Weight Progress**: Line chart over time
