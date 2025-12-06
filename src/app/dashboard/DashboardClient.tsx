@@ -83,29 +83,63 @@ export function DashboardClient({ initialActions, userEmail }: DashboardClientPr
     void (async () => {
       try {
         setIsSyncing(true);
-        for (const item of pending) {
-          await fetch('/api/actions', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(item),
-          });
-        }
-        window.localStorage.removeItem(PENDING_KEY);
+        const successful: QueuedAction[] = [];
+        const failed: QueuedAction[] = [];
 
-        // Refresh actions from server
-        const res = await fetch('/api/actions', { cache: 'no-store' });
-        if (res.ok) {
-          const refreshed = (await res.json()) as Action[];
-          setActions(refreshed);
+        for (const item of pending) {
+          try {
+            const res = await fetch('/api/actions', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(item),
+            });
+
+            if (res.ok) {
+              successful.push(item);
+            } else {
+              failed.push(item);
+              console.error('Failed to sync action:', item, 'Status:', res.status);
+            }
+          } catch (error) {
+            failed.push(item);
+            console.error('Error syncing action:', item, error);
+          }
+        }
+
+        // Only remove successfully synced items from localStorage
+        if (successful.length > 0) {
+          if (failed.length > 0) {
+            // Update queue with only failed items
+            window.localStorage.setItem(PENDING_KEY, JSON.stringify(failed));
+          } else {
+            // All items succeeded, clear the queue
+            window.localStorage.removeItem(PENDING_KEY);
+          }
+
+          // Refresh actions from server
+          const res = await fetch('/api/actions', { cache: 'no-store' });
+          if (res.ok) {
+            const refreshed = (await res.json()) as Action[];
+            setActions(refreshed);
+            addToast(
+              `Synced ${successful.length} queued action${successful.length > 1 ? 's' : ''}`,
+              'success',
+            );
+          }
+        }
+
+        // Show error if some items failed
+        if (failed.length > 0) {
           addToast(
-            `Synced ${pending.length} queued action${pending.length > 1 ? 's' : ''}`,
-            'success',
+            `Failed to sync ${failed.length} action${failed.length > 1 ? 's' : ''}. They will be retried later.`,
+            'error',
           );
         }
-      } catch {
-        addToast('Failed to sync some actions', 'error');
+      } catch (error) {
+        console.error('Unexpected error during sync:', error);
+        addToast('Failed to sync actions', 'error');
       } finally {
         setIsSyncing(false);
       }
