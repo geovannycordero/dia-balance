@@ -7,6 +7,8 @@ import { authOptions } from '@/lib/auth';
 import { dateStringToUTC, dateStringToUTCEndOfDay } from '@/lib/date-utils';
 import { prisma } from '@/lib/prisma';
 
+import type { Action } from '@prisma/client';
+
 type AnalyticsRequestQuery = {
   from?: string;
   to?: string;
@@ -58,24 +60,24 @@ export async function GET(req: Request) {
   });
 
   const bloodGlucose = actions
-    .filter((a) => a.type === ActionType.BLOOD_GLUCOSE && a.bloodGlucose !== null)
-    .map((a) => ({
+    .filter((a: Action) => a.type === ActionType.BLOOD_GLUCOSE && a.bloodGlucose !== null)
+    .map((a: Action) => ({
       timestamp: a.timestamp,
       value: a.bloodGlucose as number,
       context: a.glucoseContext ?? undefined,
     }));
 
   const insulin = actions
-    .filter((a) => a.type === ActionType.INSULIN && a.insulinUnits !== null)
-    .map((a) => ({
+    .filter((a: Action) => a.type === ActionType.INSULIN && a.insulinUnits !== null)
+    .map((a: Action) => ({
       timestamp: a.timestamp,
       units: a.insulinUnits as number,
       insulinType: a.insulinType ?? undefined,
     }));
 
   const exercise = actions
-    .filter((a) => a.type === ActionType.EXERCISE && a.exerciseDuration !== null)
-    .map((a) => ({
+    .filter((a: Action) => a.type === ActionType.EXERCISE && a.exerciseDuration !== null)
+    .map((a: Action) => ({
       timestamp: a.timestamp,
       type: a.exerciseType ?? undefined,
       duration: a.exerciseDuration as number,
@@ -83,33 +85,36 @@ export async function GET(req: Request) {
     }));
 
   const sleep = actions
-    .filter((a) => a.type === ActionType.SLEEP && a.sleepHours !== null)
-    .map((a) => ({
+    .filter((a: Action) => a.type === ActionType.SLEEP && a.sleepHours !== null)
+    .map((a: Action) => ({
       timestamp: a.timestamp,
       hours: a.sleepHours as number,
       quality: a.sleepQuality ?? undefined,
     }));
 
   const weight = actions
-    .filter((a) => a.type === ActionType.WEIGHT && a.weightValue !== null)
-    .map((a) => ({
+    .filter((a: Action) => a.type === ActionType.WEIGHT && a.weightValue !== null)
+    .map((a: Action) => ({
       timestamp: a.timestamp,
       value: a.weightValue as number,
       unit: a.weightUnit ?? undefined,
     }));
 
   const hydration = actions
-    .filter((a) => a.type === ActionType.HYDRATION && a.hydrationAmount !== null)
-    .map((a) => ({
+    .filter((a: Action) => a.type === ActionType.HYDRATION && a.hydrationAmount !== null)
+    .map((a: Action) => ({
       timestamp: a.timestamp,
       amount: a.hydrationAmount as number,
     }));
 
-  const medication = actions.filter((a) => a.type === ActionType.MEDICATION);
+  const medication = actions.filter((a: Action) => a.type === ActionType.MEDICATION);
 
   const dailyGlucoseSummary = summarizeDailyGlucose(bloodGlucose);
   const hydrationByDay = summarizeDailyTotals(
-    hydration.map((h) => ({ timestamp: h.timestamp, value: h.amount })),
+    hydration.map((h: { timestamp: Date; amount: number }) => ({
+      timestamp: h.timestamp,
+      value: h.amount,
+    })),
   );
   const weightTrend = summarizeWeight(weight);
 

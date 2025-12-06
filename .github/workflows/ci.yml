@@ -25,6 +25,11 @@ jobs:
       - name: Install dependencies
         run: yarn install --frozen-lockfile
 
+      - name: Generate Prisma client
+        run: yarn prisma generate
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/dia-balance_db
+
       - name: Run ESLint
         run: yarn lint
 
