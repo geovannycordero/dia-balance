@@ -62,6 +62,10 @@ jobs:
 
       - name: Build application
         run: yarn build
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/dia-balance_db
+          NEXTAUTH_SECRET: dummy-secret-for-build-only
+          NEXTAUTH_URL: http://localhost:3000
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
