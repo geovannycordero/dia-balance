@@ -8,6 +8,7 @@ export const enum ActionType {
   SYMPTOMS = 'SYMPTOMS',
   WEIGHT = 'WEIGHT',
   HYDRATION = 'HYDRATION',
+  BLOOD_PRESSURE = 'BLOOD_PRESSURE',
 }
 
 // Export string values for use in non-TypeScript files (e.g., seed.mjs)
@@ -21,4 +22,5 @@ export const ACTION_TYPES = {
   SYMPTOMS: 'SYMPTOMS',
   WEIGHT: 'WEIGHT',
   HYDRATION: 'HYDRATION',
+  BLOOD_PRESSURE: 'BLOOD_PRESSURE',
 } as const;

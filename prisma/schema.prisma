@@ -16,6 +16,7 @@ enum ActionType {
   SYMPTOMS
   WEIGHT
   HYDRATION
+  BLOOD_PRESSURE
 }
 
 model User {
@@ -24,6 +25,7 @@ model User {
   name        String?
   isActive    Boolean @default(true)
   isVerified  Boolean @default(false)
+  preferences Json?
 
   actions   Action[]
   createdAt DateTime @default(now()) @db.Timestamptz
@@ -72,6 +74,9 @@ model Action {
   weightUnit  String?
 
   hydrationAmount Float?
+
+  bloodPressureSystolic  Float?
+  bloodPressureDiastolic Float?
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz

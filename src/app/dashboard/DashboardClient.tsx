@@ -13,11 +13,13 @@ import {
 import { getCurrentLocalDateTime, localToUTC, utcToLocal } from '@/lib/date-utils';
 import { useOnlineStatus } from '@/lib/use-online-status';
 
+import type { UserPreferences } from '@/lib/user-preferences';
 import type { Action } from '@prisma/client';
 
 type DashboardClientProps = {
   initialActions: Action[];
-  userEmail: string;
+  userName: string;
+  userPreferences: UserPreferences;
 };
 
 type FormState = {
@@ -42,10 +44,12 @@ type FormState = {
   weightValue?: string;
   weightUnit?: string;
   hydrationAmount?: string;
+  bloodPressureSystolic?: string;
+  bloodPressureDiastolic?: string;
 };
 
-const defaultFormState = (): FormState => ({
-  type: ActionType.BLOOD_GLUCOSE,
+const defaultFormState = (enabledActionTypes: ActionType[]): FormState => ({
+  type: (enabledActionTypes[0] ?? ActionType.BLOOD_GLUCOSE) as ActionTypeSchemaType,
   timestamp: getCurrentLocalDateTime(),
   notes: '',
 });
@@ -54,14 +58,19 @@ type QueuedAction = CreateActionInput & { queuedAt: string };
 
 const PENDING_KEY = 'dia-balance-pending-actions';
 
-export function DashboardClient({ initialActions, userEmail }: DashboardClientProps) {
+export function DashboardClient({
+  initialActions,
+  userName,
+  userPreferences,
+}: DashboardClientProps) {
   const [actions, setActions] = useState<Action[]>(initialActions);
   const [isLogging, setIsLogging] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [form, setForm] = useState<FormState>(defaultFormState);
+  const [form, setForm] = useState<FormState>(defaultFormState(userPreferences.enabledActionTypes));
   const [editingActionId, setEditingActionId] = useState<string | null>(null);
+  const [deletingActionId, setDeletingActionId] = useState<string | null>(null);
   const isOnline = useOnlineStatus();
   const { addToast } = useToast();
 
@@ -200,13 +209,17 @@ export function DashboardClient({ initialActions, userEmail }: DashboardClientPr
       case ActionType.HYDRATION:
         formState.hydrationAmount = action.hydrationAmount?.toString() ?? '';
         break;
+      case ActionType.BLOOD_PRESSURE:
+        formState.bloodPressureSystolic = action.bloodPressureSystolic?.toString() ?? '';
+        formState.bloodPressureDiastolic = action.bloodPressureDiastolic?.toString() ?? '';
+        break;
     }
 
     return formState;
   };
 
   const handleOpenLogger = () => {
-    setForm(defaultFormState());
+    setForm(defaultFormState(userPreferences.enabledActionTypes));
     setError(null);
     setEditingActionId(null);
     setIsLogging(true);
@@ -303,6 +316,13 @@ export function DashboardClient({ initialActions, userEmail }: DashboardClientPr
           type: ActionType.HYDRATION,
           hydrationAmount: Number(form.hydrationAmount),
         };
+      case ActionType.BLOOD_PRESSURE:
+        return {
+          ...base,
+          type: ActionType.BLOOD_PRESSURE,
+          bloodPressureSystolic: Number(form.bloodPressureSystolic),
+          bloodPressureDiastolic: Number(form.bloodPressureDiastolic),
+        };
       default:
         return base;
     }
@@ -377,7 +397,16 @@ export function DashboardClient({ initialActions, userEmail }: DashboardClientPr
       setIsSubmitting(false);
     }
   };
+  const handleDeleteClick = (id: string) => {
+    setDeletingActionId(id);
+  };
+
+  const handleDeleteCancel = () => {
+    setDeletingActionId(null);
+  };
+
   const handleDelete = async (id: string) => {
+    setDeletingActionId(null);
     const previous = actions;
     setActions((prev) => prev.filter((a) => a.id !== id));
 
@@ -409,7 +438,7 @@ export function DashboardClient({ initialActions, userEmail }: DashboardClientPr
               <h1 className="mt-1 text-2xl font-semibold tracking-tight">Dashboard</h1>
               <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
                 Recent health actions for{' '}
-                <span className="font-medium text-slate-900 dark:text-slate-100">{userEmail}</span>
+                <span className="font-medium text-slate-900 dark:text-slate-100">{userName}</span>
               </p>
             </div>
           </header>
@@ -479,7 +508,7 @@ export function DashboardClient({ initialActions, userEmail }: DashboardClientPr
                           <button
                             type="button"
                             className="text-xs text-rose-600 hover:text-rose-700 dark:text-rose-400 dark:hover:text-rose-300"
-                            onClick={() => handleDelete(action.id)}
+                            onClick={() => handleDeleteClick(action.id)}
                           >
                             Delete
                           </button>
@@ -530,11 +559,13 @@ export function DashboardClient({ initialActions, userEmail }: DashboardClientPr
                           updateField('type', e.target.value as ActionTypeSchemaType)
                         }
                       >
-                        {ActionTypeSchema.options.map((option) => (
-                          <option key={option} value={option}>
-                            {formatActionTypeLabel(option)}
-                          </option>
-                        ))}
+                        {ActionTypeSchema.options
+                          .filter((option) => userPreferences.enabledActionTypes.includes(option))
+                          .map((option) => (
+                            <option key={option} value={option}>
+                              {formatActionTypeLabel(option)}
+                            </option>
+                          ))}
                       </select>
                     </div>
                     <div>
@@ -583,6 +614,38 @@ export function DashboardClient({ initialActions, userEmail }: DashboardClientPr
               </div>
             </div>
           )}
+
+          {/* Delete confirmation modal */}
+          {deletingActionId && (
+            <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/50 px-4 py-6">
+              <div className="relative w-full max-w-md rounded-3xl bg-white p-5 shadow-2xl ring-1 ring-slate-200 dark:bg-slate-950 dark:ring-slate-800">
+                <div className="mb-3 flex items-center justify-between">
+                  <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                    Confirm deletion
+                  </h2>
+                </div>
+                <p className="mb-4 text-sm text-slate-600 dark:text-slate-400">
+                  Are you sure you want to delete this action? This cannot be undone.
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={handleDeleteCancel}
+                    className="flex-1 rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(deletingActionId)}
+                    className="flex-1 rounded-xl bg-rose-500 px-4 py-2 text-xs font-medium text-white shadow-md shadow-rose-500/30 transition hover:bg-rose-600 dark:hover:bg-rose-400"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </main>
     </>
@@ -609,6 +672,8 @@ function formatActionTypeLabel(type: ActionTypeSchemaType) {
       return 'Weight';
     case ActionType.HYDRATION:
       return 'Hydration';
+    case ActionType.BLOOD_PRESSURE:
+      return 'Blood Pressure';
   }
 }
 
@@ -632,6 +697,10 @@ function formatActionTitle(action: Action) {
       return action.weightValue ? `Weight ${action.weightValue}` : 'Weight';
     case ActionType.HYDRATION:
       return action.hydrationAmount ? `Hydration ${action.hydrationAmount}` : 'Hydration';
+    case ActionType.BLOOD_PRESSURE:
+      return action.bloodPressureSystolic && action.bloodPressureDiastolic
+        ? `BP ${action.bloodPressureSystolic}/${action.bloodPressureDiastolic} mm Hg`
+        : 'Blood pressure';
     default:
       return action.type;
   }
@@ -661,9 +730,47 @@ function formatActionDetails(action: Action) {
       return action.weightUnit ? `${action.weightValue ?? ''} ${action.weightUnit}` : '';
     case ActionType.HYDRATION:
       return action.hydrationAmount ? `${action.hydrationAmount} (preferred units)` : '';
+    case ActionType.BLOOD_PRESSURE:
+      if (action.bloodPressureSystolic && action.bloodPressureDiastolic) {
+        const category = getBloodPressureCategory(
+          action.bloodPressureSystolic,
+          action.bloodPressureDiastolic,
+        );
+        const categoryLabel =
+          category === 'normal'
+            ? 'Normal'
+            : category === 'elevated'
+              ? 'Elevated'
+              : category === 'hypertension-stage-1'
+                ? 'Hypertension Stage 1'
+                : category === 'hypertension-stage-2'
+                  ? 'Hypertension Stage 2'
+                  : 'Hypertensive Crisis';
+        return categoryLabel;
+      }
+      return '';
     default:
       return '';
   }
+}
+
+function getBloodPressureCategory(
+  systolic: number,
+  diastolic: number,
+): 'normal' | 'elevated' | 'hypertension-stage-1' | 'hypertension-stage-2' | 'crisis' {
+  if (systolic > 180 || diastolic > 120) {
+    return 'crisis';
+  }
+  if (systolic >= 140 || diastolic >= 90) {
+    return 'hypertension-stage-2';
+  }
+  if (systolic >= 130 || diastolic >= 80) {
+    return 'hypertension-stage-1';
+  }
+  if (systolic >= 120) {
+    return 'elevated';
+  }
+  return 'normal';
 }
 
 function renderTypeSpecificFields(
@@ -915,6 +1022,37 @@ function renderTypeSpecificFields(
             value={form.hydrationAmount ?? ''}
             onChange={(e) => updateField('hydrationAmount', e.target.value)}
           />
+        </div>
+      );
+    case ActionType.BLOOD_PRESSURE:
+      return (
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
+              Systolic (mm Hg)
+            </label>
+            <input
+              type="number"
+              min={50}
+              max={300}
+              className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-2 py-2 text-sm text-slate-900 outline-none ring-sky-500/60 focus:border-sky-500 focus:ring-2 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+              value={form.bloodPressureSystolic ?? ''}
+              onChange={(e) => updateField('bloodPressureSystolic', e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
+              Diastolic (mm Hg)
+            </label>
+            <input
+              type="number"
+              min={30}
+              max={200}
+              className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-2 py-2 text-sm text-slate-900 outline-none ring-sky-500/60 focus:border-sky-500 focus:ring-2 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+              value={form.bloodPressureDiastolic ?? ''}
+              onChange={(e) => updateField('bloodPressureDiastolic', e.target.value)}
+            />
+          </div>
         </div>
       );
     default:

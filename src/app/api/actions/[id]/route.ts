@@ -77,6 +77,14 @@ export async function PATCH(req: Request, { params }: RouteParams) {
       weightUnit: 'weightUnit' in data ? (data.weightUnit ?? null) : existing.weightUnit,
       hydrationAmount:
         'hydrationAmount' in data ? (data.hydrationAmount ?? null) : existing.hydrationAmount,
+      bloodPressureSystolic:
+        'bloodPressureSystolic' in data
+          ? (data.bloodPressureSystolic ?? null)
+          : existing.bloodPressureSystolic,
+      bloodPressureDiastolic:
+        'bloodPressureDiastolic' in data
+          ? (data.bloodPressureDiastolic ?? null)
+          : existing.bloodPressureDiastolic,
     },
   });
 

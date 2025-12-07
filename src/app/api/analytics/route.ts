@@ -107,9 +107,27 @@ export async function GET(req: Request) {
       amount: a.hydrationAmount as number,
     }));
 
+  const bloodPressure = actions
+    .filter(
+      (a: Action) =>
+        a.type === ActionType.BLOOD_PRESSURE &&
+        a.bloodPressureSystolic !== null &&
+        a.bloodPressureDiastolic !== null,
+    )
+    .map((a: Action) => ({
+      timestamp: a.timestamp,
+      systolic: a.bloodPressureSystolic as number,
+      diastolic: a.bloodPressureDiastolic as number,
+      category: getBloodPressureCategory(
+        a.bloodPressureSystolic as number,
+        a.bloodPressureDiastolic as number,
+      ),
+    }));
+
   const medication = actions.filter((a: Action) => a.type === ActionType.MEDICATION);
 
   const dailyGlucoseSummary = summarizeDailyGlucose(bloodGlucose);
+  const dailyBloodPressureSummary = summarizeDailyBloodPressure(bloodPressure);
   const hydrationByDay = summarizeDailyTotals(
     hydration.map((h: { timestamp: Date; amount: number }) => ({
       timestamp: h.timestamp,
@@ -118,6 +136,8 @@ export async function GET(req: Request) {
   );
   const weightTrend = summarizeWeight(weight);
 
+  const bpGlucoseCorrelation = calculateBPCorrelation(bloodPressure, bloodGlucose);
+
   const insights = buildInsights({
     bloodGlucose,
     insulin,
@@ -125,7 +145,9 @@ export async function GET(req: Request) {
     sleep,
     weight,
     hydration,
+    bloodPressure,
     medicationCount: medication.length,
+    bpGlucoseCorrelation,
   });
 
   return NextResponse.json({
@@ -139,9 +161,12 @@ export async function GET(req: Request) {
     sleep,
     weight,
     hydration,
+    bloodPressure,
     dailyGlucoseSummary,
+    dailyBloodPressureSummary,
     hydrationByDay,
     weightTrend,
+    bpGlucoseCorrelation,
     insights,
   });
 }
@@ -203,6 +228,153 @@ function summarizeWeight(points: { timestamp: Date; value: number; unit?: string
   }));
 }
 
+function summarizeDailyBloodPressure(
+  readings: { timestamp: Date; systolic: number; diastolic: number; category: string }[],
+) {
+  const byDay = new Map<
+    string,
+    {
+      date: string;
+      systolicCount: number;
+      systolicSum: number;
+      systolicMin: number;
+      systolicMax: number;
+      diastolicCount: number;
+      diastolicSum: number;
+      diastolicMin: number;
+      diastolicMax: number;
+    }
+  >();
+
+  readings.forEach((r) => {
+    const key = startOfDay(r.timestamp).toISOString();
+    const existing = byDay.get(key) ?? {
+      date: key,
+      systolicCount: 0,
+      systolicSum: 0,
+      systolicMin: r.systolic,
+      systolicMax: r.systolic,
+      diastolicCount: 0,
+      diastolicSum: 0,
+      diastolicMin: r.diastolic,
+      diastolicMax: r.diastolic,
+    };
+    existing.systolicCount += 1;
+    existing.systolicSum += r.systolic;
+    existing.systolicMin = Math.min(existing.systolicMin, r.systolic);
+    existing.systolicMax = Math.max(existing.systolicMax, r.systolic);
+    existing.diastolicCount += 1;
+    existing.diastolicSum += r.diastolic;
+    existing.diastolicMin = Math.min(existing.diastolicMin, r.diastolic);
+    existing.diastolicMax = Math.max(existing.diastolicMax, r.diastolic);
+    byDay.set(key, existing);
+  });
+
+  return Array.from(byDay.values()).map((d) => ({
+    date: d.date,
+    systolicAvg: d.systolicCount ? d.systolicSum / d.systolicCount : 0,
+    systolicMin: d.systolicMin,
+    systolicMax: d.systolicMax,
+    systolicCount: d.systolicCount,
+    diastolicAvg: d.diastolicCount ? d.diastolicSum / d.diastolicCount : 0,
+    diastolicMin: d.diastolicMin,
+    diastolicMax: d.diastolicMax,
+    diastolicCount: d.diastolicCount,
+  }));
+}
+
+function getBloodPressureCategory(
+  systolic: number,
+  diastolic: number,
+): 'normal' | 'elevated' | 'hypertension-stage-1' | 'hypertension-stage-2' | 'crisis' {
+  if (systolic > 180 || diastolic > 120) {
+    return 'crisis';
+  }
+  if (systolic >= 140 || diastolic >= 90) {
+    return 'hypertension-stage-2';
+  }
+  if (systolic >= 130 || diastolic >= 80) {
+    return 'hypertension-stage-1';
+  }
+  if (systolic >= 120) {
+    return 'elevated';
+  }
+  return 'normal';
+}
+
+function calculateBPCorrelation(
+  bpReadings: { timestamp: Date; systolic: number; diastolic: number }[],
+  glucoseReadings: { timestamp: Date; value: number }[],
+): { coefficient: number; strength: string; direction: string } | null {
+  if (bpReadings.length === 0 || glucoseReadings.length === 0) {
+    return null;
+  }
+
+  // Match BP and glucose readings within 30 minutes
+  const matchedPairs: { bp: number; glucose: number }[] = [];
+
+  bpReadings.forEach((bp) => {
+    const bpTime = bp.timestamp.getTime();
+    const matchingGlucose = glucoseReadings.find((g) => {
+      const glucoseTime = g.timestamp.getTime();
+      const diffMinutes = Math.abs(bpTime - glucoseTime) / (1000 * 60);
+      return diffMinutes <= 30;
+    });
+
+    if (matchingGlucose) {
+      matchedPairs.push({ bp: bp.systolic, glucose: matchingGlucose.value });
+    }
+  });
+
+  if (matchedPairs.length < 3) {
+    // Need at least 3 pairs for meaningful correlation
+    return null;
+  }
+
+  // Calculate Pearson correlation coefficient
+  const n = matchedPairs.length;
+  const bpValues = matchedPairs.map((p) => p.bp);
+  const glucoseValues = matchedPairs.map((p) => p.glucose);
+
+  const bpMean = bpValues.reduce((sum, val) => sum + val, 0) / n;
+  const glucoseMean = glucoseValues.reduce((sum, val) => sum + val, 0) / n;
+
+  let numerator = 0;
+  let bpVariance = 0;
+  let glucoseVariance = 0;
+
+  for (let i = 0; i < n; i++) {
+    const bpDiff = bpValues[i] - bpMean;
+    const glucoseDiff = glucoseValues[i] - glucoseMean;
+    numerator += bpDiff * glucoseDiff;
+    bpVariance += bpDiff * bpDiff;
+    glucoseVariance += glucoseDiff * glucoseDiff;
+  }
+
+  const denominator = Math.sqrt(bpVariance * glucoseVariance);
+  const coefficient = denominator === 0 ? 0 : numerator / denominator;
+
+  // Determine strength
+  const absCoeff = Math.abs(coefficient);
+  let strength: string;
+  if (absCoeff >= 0.7) {
+    strength = 'strong';
+  } else if (absCoeff >= 0.4) {
+    strength = 'moderate';
+  } else {
+    strength = 'weak';
+  }
+
+  // Determine direction
+  const direction = coefficient >= 0 ? 'positive' : 'negative';
+
+  return {
+    coefficient: Math.round(coefficient * 100) / 100, // Round to 2 decimal places
+    strength,
+    direction,
+  };
+}
+
 type InsightContext = {
   bloodGlucose: { timestamp: Date; value: number; context?: string }[];
   insulin: { timestamp: Date; units: number; insulinType?: string }[];
@@ -210,7 +382,9 @@ type InsightContext = {
   sleep: { timestamp: Date; hours: number; quality?: number | null }[];
   weight: { timestamp: Date; value: number; unit?: string | null }[];
   hydration: { timestamp: Date; amount: number }[];
+  bloodPressure: { timestamp: Date; systolic: number; diastolic: number; category: string }[];
   medicationCount: number;
+  bpGlucoseCorrelation: { coefficient: number; strength: string; direction: string } | null;
 };
 
 function buildInsights(ctx: InsightContext) {
@@ -258,6 +432,59 @@ function buildInsights(ctx: InsightContext) {
 
   if (ctx.hydration.length > 0) {
     insights.push('You have been logging hydration; aim for consistent daily intake.');
+  }
+
+  if (ctx.bloodPressure.length > 0) {
+    const avgSystolic =
+      ctx.bloodPressure.reduce((sum, bp) => sum + bp.systolic, 0) / ctx.bloodPressure.length;
+    const avgDiastolic =
+      ctx.bloodPressure.reduce((sum, bp) => sum + bp.diastolic, 0) / ctx.bloodPressure.length;
+    insights.push(
+      `Your average blood pressure in this period is ${avgSystolic.toFixed(0)}/${avgDiastolic.toFixed(0)} mm Hg.`,
+    );
+
+    // Category distribution
+    const categoryCounts = new Map<string, number>();
+    ctx.bloodPressure.forEach((bp) => {
+      categoryCounts.set(bp.category, (categoryCounts.get(bp.category) || 0) + 1);
+    });
+
+    const elevatedCount = categoryCounts.get('elevated') || 0;
+    const stage1Count = categoryCounts.get('hypertension-stage-1') || 0;
+    const stage2Count = categoryCounts.get('hypertension-stage-2') || 0;
+    const crisisCount = categoryCounts.get('crisis') || 0;
+
+    if (crisisCount > 0) {
+      insights.push(
+        `⚠️ ${crisisCount} reading${crisisCount > 1 ? 's' : ''} in hypertensive crisis range (>180/>120). Please consult your healthcare provider immediately.`,
+      );
+    } else if (stage2Count > 0) {
+      insights.push(
+        `${stage2Count} reading${stage2Count > 1 ? 's' : ''} in Hypertension Stage 2 range (≥140/≥90). Consider discussing with your healthcare provider.`,
+      );
+    } else if (stage1Count > 0) {
+      insights.push(
+        `${stage1Count} reading${stage1Count > 1 ? 's' : ''} in Hypertension Stage 1 range (130-139/80-89). Monitor closely.`,
+      );
+    } else if (elevatedCount > 0) {
+      insights.push(
+        `${elevatedCount} reading${elevatedCount > 1 ? 's' : ''} in elevated range (120-129/<80). Continue monitoring.`,
+      );
+    }
+  }
+
+  if (ctx.bpGlucoseCorrelation) {
+    const { coefficient, strength, direction } = ctx.bpGlucoseCorrelation;
+    const absCoeff = Math.abs(coefficient);
+    if (absCoeff >= 0.4) {
+      const interpretation =
+        direction === 'positive'
+          ? 'Higher blood glucose tends to coincide with higher blood pressure'
+          : 'Higher blood glucose tends to coincide with lower blood pressure';
+      insights.push(
+        `${strength.charAt(0).toUpperCase() + strength.slice(1)} ${direction} correlation (r=${coefficient.toFixed(2)}): ${interpretation}.`,
+      );
+    }
   }
 
   return insights;

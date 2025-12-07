@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth/next';
 import { DashboardClient } from '@/app/dashboard/DashboardClient';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { getUserPreferences } from '@/lib/user-preferences';
 
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
@@ -19,11 +20,22 @@ export default async function DashboardPage() {
     redirect('/auth/signin');
   }
 
-  const actions = await prisma.action.findMany({
-    where: { userId },
-    orderBy: { timestamp: 'desc' },
-    take: 50,
-  });
+  const [actions, user] = await Promise.all([
+    prisma.action.findMany({
+      where: { userId },
+      orderBy: { timestamp: 'desc' },
+      take: 50,
+    }),
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: { preferences: true, name: true, email: true },
+    }),
+  ]);
 
-  return <DashboardClient initialActions={actions} userEmail={session.user.email ?? ''} />;
+  const preferences = getUserPreferences(user ?? { preferences: null });
+  const userName = user?.name || session.user.email || 'User';
+
+  return (
+    <DashboardClient initialActions={actions} userName={userName} userPreferences={preferences} />
+  );
 }

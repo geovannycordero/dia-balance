@@ -20,9 +20,27 @@ type AnalyticsData = {
   sleep: { timestamp: string; hours: number; quality?: number | null }[];
   weight: { timestamp: string; value: number; unit?: string | null }[];
   hydration: { timestamp: string; amount: number }[];
+  bloodPressure: {
+    timestamp: string;
+    systolic: number;
+    diastolic: number;
+    category: string;
+  }[];
   dailyGlucoseSummary: { date: string; avg: number; min: number; max: number; count: number }[];
+  dailyBloodPressureSummary: {
+    date: string;
+    systolicAvg: number;
+    systolicMin: number;
+    systolicMax: number;
+    systolicCount: number;
+    diastolicAvg: number;
+    diastolicMin: number;
+    diastolicMax: number;
+    diastolicCount: number;
+  }[];
   hydrationByDay: { date: string; total: number }[];
   weightTrend: { timestamp: string; value: number; unit?: string | null }[];
+  bpGlucoseCorrelation: { coefficient: number; strength: string; direction: string } | null;
   insights: string[];
 };
 
@@ -83,6 +101,17 @@ export function exportToPDF(data: AnalyticsData): void {
       'Hydration',
       `${total.toFixed(0)} total`,
       `${data.hydration.length} entries`,
+    ]);
+  }
+  if (data.bloodPressure.length > 0) {
+    const avgSystolic =
+      data.bloodPressure.reduce((s, r) => s + r.systolic, 0) / data.bloodPressure.length;
+    const avgDiastolic =
+      data.bloodPressure.reduce((s, r) => s + r.diastolic, 0) / data.bloodPressure.length;
+    summaryData.push([
+      'Blood Pressure',
+      `${avgSystolic.toFixed(0)}/${avgDiastolic.toFixed(0)} mm Hg avg`,
+      `${data.bloodPressure.length} readings`,
     ]);
   }
 
@@ -160,6 +189,115 @@ export function exportToPDF(data: AnalyticsData): void {
       doc.setFontSize(10);
       doc.text(`Showing first 20 of ${data.insulin.length} doses`, margin, yPos);
       yPos += 10;
+    }
+  }
+
+  // Blood Pressure Data
+  if (data.bloodPressure.length > 0) {
+    if (yPos > doc.internal.pageSize.getHeight() - 40) {
+      doc.addPage();
+      yPos = margin;
+    }
+    doc.setFontSize(14);
+    doc.text('Blood Pressure Readings', margin, yPos);
+    yPos += 8;
+
+    const bpData = data.bloodPressure.map((r) => [
+      formatDateForDisplay(r.timestamp),
+      `${r.systolic}/${r.diastolic} mm Hg`,
+      r.category === 'normal'
+        ? 'Normal'
+        : r.category === 'elevated'
+          ? 'Elevated'
+          : r.category === 'hypertension-stage-1'
+            ? 'Stage 1'
+            : r.category === 'hypertension-stage-2'
+              ? 'Stage 2'
+              : 'Crisis',
+    ]);
+
+    autoTable(doc, {
+      startY: yPos,
+      head: [['Timestamp', 'Reading', 'Category']],
+      body: bpData.slice(0, 20),
+      theme: 'striped',
+      headStyles: { fillColor: [239, 68, 68] },
+      margin: { left: margin, right: margin },
+    });
+
+    yPos = doc.lastAutoTable.finalY + 10;
+    if (data.bloodPressure.length > 20) {
+      doc.setFontSize(10);
+      doc.text(`Showing first 20 of ${data.bloodPressure.length} readings`, margin, yPos);
+      yPos += 10;
+    }
+
+    // Daily BP Summary
+    if (data.dailyBloodPressureSummary.length > 0) {
+      if (yPos > doc.internal.pageSize.getHeight() - 40) {
+        doc.addPage();
+        yPos = margin;
+      }
+      doc.setFontSize(14);
+      doc.text('Daily Blood Pressure Summary', margin, yPos);
+      yPos += 8;
+
+      const dailyBpData = data.dailyBloodPressureSummary.map((d) => [
+        formatDateOnly(d.date),
+        `${d.systolicAvg.toFixed(0)}/${d.diastolicAvg.toFixed(0)}`,
+        `${d.systolicMin}-${d.systolicMax} / ${d.diastolicMin}-${d.diastolicMax}`,
+        `${d.systolicCount} readings`,
+      ]);
+
+      autoTable(doc, {
+        startY: yPos,
+        head: [['Date', 'Avg (S/D)', 'Range (S/D)', 'Count']],
+        body: dailyBpData,
+        theme: 'striped',
+        headStyles: { fillColor: [239, 68, 68] },
+        margin: { left: margin, right: margin },
+      });
+
+      yPos = doc.lastAutoTable.finalY + 15;
+    }
+
+    // Correlation Analysis
+    if (data.bpGlucoseCorrelation) {
+      if (yPos > doc.internal.pageSize.getHeight() - 40) {
+        doc.addPage();
+        yPos = margin;
+      }
+      doc.setFontSize(14);
+      doc.text('Blood Pressure & Glucose Correlation', margin, yPos);
+      yPos += 8;
+
+      doc.setFontSize(11);
+      doc.text(
+        `Correlation Coefficient (r): ${data.bpGlucoseCorrelation.coefficient.toFixed(2)}`,
+        margin,
+        yPos,
+      );
+      yPos += 7;
+      doc.text(
+        `Strength: ${data.bpGlucoseCorrelation.strength.charAt(0).toUpperCase() + data.bpGlucoseCorrelation.strength.slice(1)}`,
+        margin,
+        yPos,
+      );
+      yPos += 7;
+      doc.text(
+        `Direction: ${data.bpGlucoseCorrelation.direction.charAt(0).toUpperCase() + data.bpGlucoseCorrelation.direction.slice(1)}`,
+        margin,
+        yPos,
+      );
+      yPos += 7;
+      doc.text(
+        data.bpGlucoseCorrelation.direction === 'positive'
+          ? 'Higher glucose tends to coincide with higher blood pressure.'
+          : 'Higher glucose tends to coincide with lower blood pressure.',
+        margin,
+        yPos,
+      );
+      yPos += 15;
     }
   }
 

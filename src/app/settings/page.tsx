@@ -1,12 +1,12 @@
 import { redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth/next';
 
-import { AnalyticsClient } from '@/app/analytics/AnalyticsClient';
+import { SettingsClient } from '@/app/settings/SettingsClient';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { getUserPreferences } from '@/lib/user-preferences';
 
-export default async function AnalyticsPage() {
+export default async function SettingsPage() {
   const session = await getServerSession(authOptions);
 
   if (!session?.user) {
@@ -22,10 +22,25 @@ export default async function AnalyticsPage() {
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { preferences: true },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      preferences: true,
+    },
   });
 
-  const preferences = getUserPreferences(user ?? { preferences: null });
+  if (!user) {
+    redirect('/auth/signin');
+  }
 
-  return <AnalyticsClient userPreferences={preferences} />;
+  const preferences = getUserPreferences(user);
+
+  return (
+    <SettingsClient
+      initialName={user.name ?? ''}
+      initialEmail={user.email}
+      initialPreferences={preferences}
+    />
+  );
 }

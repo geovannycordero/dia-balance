@@ -20,6 +20,8 @@ import { RangePreset } from '@/app/constants/range-presets';
 import { Navigation } from '@/components/Navigation';
 import { exportToPDF } from '@/lib/export';
 
+import type { UserPreferences } from '@/lib/user-preferences';
+
 type AnalyticsResponse = {
   range: {
     from: string;
@@ -31,13 +33,35 @@ type AnalyticsResponse = {
   sleep: { timestamp: string; hours: number; quality?: number | null }[];
   weight: { timestamp: string; value: number; unit?: string | null }[];
   hydration: { timestamp: string; amount: number }[];
+  bloodPressure: {
+    timestamp: string;
+    systolic: number;
+    diastolic: number;
+    category: string;
+  }[];
   dailyGlucoseSummary: { date: string; avg: number; min: number; max: number; count: number }[];
+  dailyBloodPressureSummary: {
+    date: string;
+    systolicAvg: number;
+    systolicMin: number;
+    systolicMax: number;
+    systolicCount: number;
+    diastolicAvg: number;
+    diastolicMin: number;
+    diastolicMax: number;
+    diastolicCount: number;
+  }[];
   hydrationByDay: { date: string; total: number }[];
   weightTrend: { timestamp: string; value: number; unit?: string | null }[];
+  bpGlucoseCorrelation: { coefficient: number; strength: string; direction: string } | null;
   insights: string[];
 };
 
-export function AnalyticsClient() {
+type AnalyticsClientProps = {
+  userPreferences: UserPreferences;
+};
+
+export function AnalyticsClient({ userPreferences }: AnalyticsClientProps) {
   const [preset, setPreset] = useState<RangePreset>(RangePreset.TODAY);
   const [from, setFrom] = useState<string | null>(null);
   const [to, setTo] = useState<string | null>(null);
@@ -133,7 +157,7 @@ export function AnalyticsClient() {
 
     const rows: string[] = [];
     rows.push(
-      'type,timestamp,bloodGlucose,insulinUnits,insulinType,exerciseType,exerciseDuration,exerciseIntensity,sleepHours,sleepQuality,weightValue,weightUnit,hydrationAmount',
+      'type,timestamp,bloodGlucose,insulinUnits,insulinType,exerciseType,exerciseDuration,exerciseIntensity,sleepHours,sleepQuality,weightValue,weightUnit,hydrationAmount,bloodPressureSystolic,bloodPressureDiastolic',
     );
 
     data.bloodGlucose.forEach((r) => {
@@ -142,6 +166,8 @@ export function AnalyticsClient() {
           ActionType.BLOOD_GLUCOSE,
           r.timestamp,
           r.value,
+          '',
+          '',
           '',
           '',
           '',
@@ -172,6 +198,8 @@ export function AnalyticsClient() {
           '',
           '',
           '',
+          '',
+          '',
         ].join(','),
       );
     });
@@ -187,6 +215,8 @@ export function AnalyticsClient() {
           r.type ?? '',
           r.duration,
           r.intensity ?? '',
+          '',
+          '',
           '',
           '',
           '',
@@ -212,6 +242,8 @@ export function AnalyticsClient() {
           '',
           '',
           '',
+          '',
+          '',
         ].join(','),
       );
     });
@@ -232,15 +264,54 @@ export function AnalyticsClient() {
           r.value,
           r.unit ?? '',
           '',
+          '',
+          '',
         ].join(','),
       );
     });
 
     data.hydration.forEach((r) => {
       rows.push(
-        [ActionType.HYDRATION, r.timestamp, '', '', '', '', '', '', '', '', '', '', r.amount].join(
-          ',',
-        ),
+        [
+          ActionType.HYDRATION,
+          r.timestamp,
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          r.amount,
+          '',
+          '',
+        ].join(','),
+      );
+    });
+
+    data.bloodPressure.forEach((r) => {
+      rows.push(
+        [
+          ActionType.BLOOD_PRESSURE,
+          r.timestamp,
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          r.systolic,
+          r.diastolic,
+        ].join(','),
       );
     });
 
@@ -291,8 +362,8 @@ export function AnalyticsClient() {
                 Analytics & insights
               </h1>
               <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-                Trends and relationships across glucose, insulin, activity, sleep, weight, and
-                hydration.
+                Trends and relationships across glucose, insulin, activity, sleep, weight,
+                hydration, and blood pressure.
               </p>
             </div>
             <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
@@ -376,209 +447,509 @@ export function AnalyticsClient() {
 
           {data && (
             <div className="flex flex-col gap-6">
-              <section className="grid gap-4 md:grid-cols-2">
-                <AnalyticsCard title="Blood glucose trend">
-                  <ResponsiveContainer width="100%" height={220}>
-                    <LineChart
-                      data={data.bloodGlucose.map((p) => ({
-                        time: new Date(p.timestamp).toLocaleString(),
-                        value: p.value,
-                      }))}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                      <XAxis dataKey="time" tick={{ fontSize: 10 }} />
-                      <YAxis tick={{ fontSize: 10 }} />
-                      <Tooltip />
-                      <Legend />
-                      <Line
-                        type="monotone"
-                        dataKey="value"
-                        name="mg/dL"
-                        stroke="#38bdf8"
-                        strokeWidth={2}
-                        dot={false}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </AnalyticsCard>
+              {/* Glucose Charts */}
+              {(userPreferences.enabledAnalytics.bloodGlucoseTrend ||
+                userPreferences.enabledAnalytics.dailyGlucoseSummary) && (
+                <section
+                  className={`grid gap-4 ${
+                    userPreferences.enabledAnalytics.bloodGlucoseTrend &&
+                    userPreferences.enabledAnalytics.dailyGlucoseSummary
+                      ? 'md:grid-cols-2'
+                      : 'md:grid-cols-1'
+                  }`}
+                >
+                  {userPreferences.enabledAnalytics.bloodGlucoseTrend && (
+                    <AnalyticsCard title="Blood glucose trend">
+                      <ResponsiveContainer width="100%" height={220}>
+                        <LineChart
+                          data={data.bloodGlucose.map((p) => ({
+                            time: new Date(p.timestamp).toLocaleString(),
+                            value: p.value,
+                          }))}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                          <XAxis dataKey="time" tick={{ fontSize: 10 }} />
+                          <YAxis tick={{ fontSize: 10 }} />
+                          <Tooltip />
+                          <Legend />
+                          <Line
+                            type="monotone"
+                            dataKey="value"
+                            name="mg/dL"
+                            stroke="#38bdf8"
+                            strokeWidth={2}
+                            dot={false}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </AnalyticsCard>
+                  )}
 
-                <AnalyticsCard title="Daily glucose summary">
-                  <ResponsiveContainer width="100%" height={220}>
-                    <LineChart
-                      data={data.dailyGlucoseSummary.map((d) => ({
-                        date: new Date(d.date).toLocaleDateString(),
-                        avg: d.avg,
-                        min: d.min,
-                        max: d.max,
-                      }))}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                      <XAxis dataKey="date" tick={{ fontSize: 10 }} />
-                      <YAxis tick={{ fontSize: 10 }} />
-                      <Tooltip />
-                      <Legend />
-                      <Line
-                        type="monotone"
-                        dataKey="min"
-                        stroke="#22c55e"
-                        strokeWidth={1.5}
-                        dot={false}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="avg"
-                        stroke="#38bdf8"
-                        strokeWidth={2}
-                        dot={false}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="max"
-                        stroke="#f97316"
-                        strokeWidth={1.5}
-                        dot={false}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </AnalyticsCard>
-              </section>
+                  {userPreferences.enabledAnalytics.dailyGlucoseSummary && (
+                    <AnalyticsCard title="Daily glucose summary">
+                      <ResponsiveContainer width="100%" height={220}>
+                        <LineChart
+                          data={data.dailyGlucoseSummary.map((d) => ({
+                            date: new Date(d.date).toLocaleDateString(),
+                            avg: d.avg,
+                            min: d.min,
+                            max: d.max,
+                          }))}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                          <XAxis dataKey="date" tick={{ fontSize: 10 }} />
+                          <YAxis tick={{ fontSize: 10 }} />
+                          <Tooltip />
+                          <Legend />
+                          <Line
+                            type="monotone"
+                            dataKey="min"
+                            stroke="#22c55e"
+                            strokeWidth={1.5}
+                            dot={false}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="avg"
+                            stroke="#38bdf8"
+                            strokeWidth={2}
+                            dot={false}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="max"
+                            stroke="#f97316"
+                            strokeWidth={1.5}
+                            dot={false}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </AnalyticsCard>
+                  )}
+                </section>
+              )}
 
-              <section className="grid gap-4 md:grid-cols-2">
-                <AnalyticsCard title="Insulin vs glucose">
-                  <ResponsiveContainer width="100%" height={220}>
-                    <LineChart
-                      data={mergeSeriesForDualAxis(
-                        data.insulin.map((p) => ({
-                          time: new Date(p.timestamp).toISOString(),
-                          insulinUnits: p.units,
-                        })),
-                        data.bloodGlucose.map((p) => ({
-                          time: new Date(p.timestamp).toISOString(),
-                          glucose: p.value,
-                        })),
+              {/* Insulin & Hydration Charts */}
+              {(userPreferences.enabledAnalytics.insulinVsGlucose ||
+                userPreferences.enabledAnalytics.exerciseHydration) && (
+                <section
+                  className={`grid gap-4 ${
+                    userPreferences.enabledAnalytics.insulinVsGlucose &&
+                    userPreferences.enabledAnalytics.exerciseHydration
+                      ? 'md:grid-cols-2'
+                      : 'md:grid-cols-1'
+                  }`}
+                >
+                  {userPreferences.enabledAnalytics.insulinVsGlucose && (
+                    <AnalyticsCard title="Insulin vs glucose">
+                      <ResponsiveContainer width="100%" height={220}>
+                        <LineChart
+                          data={mergeSeriesForDualAxis(
+                            data.insulin.map((p) => ({
+                              time: new Date(p.timestamp).toISOString(),
+                              insulinUnits: p.units,
+                            })),
+                            data.bloodGlucose.map((p) => ({
+                              time: new Date(p.timestamp).toISOString(),
+                              glucose: p.value,
+                            })),
+                          )}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                          <XAxis
+                            dataKey="label"
+                            tick={{ fontSize: 10 }}
+                            interval="preserveStartEnd"
+                          />
+                          <YAxis
+                            yAxisId="left"
+                            tick={{ fontSize: 10 }}
+                            label={{ value: 'mg/dL', angle: -90, position: 'insideLeft' }}
+                          />
+                          <YAxis
+                            yAxisId="right"
+                            orientation="right"
+                            tick={{ fontSize: 10 }}
+                            label={{ value: 'Units', angle: 90, position: 'insideRight' }}
+                          />
+                          <Tooltip />
+                          <Legend />
+                          <Line
+                            yAxisId="left"
+                            type="monotone"
+                            dataKey="glucose"
+                            name="Glucose (mg/dL)"
+                            stroke="#38bdf8"
+                            strokeWidth={2}
+                            dot={false}
+                          />
+                          <Line
+                            yAxisId="right"
+                            type="monotone"
+                            dataKey="insulinUnits"
+                            name="Insulin (units)"
+                            stroke="#a855f7"
+                            strokeWidth={2}
+                            dot={false}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </AnalyticsCard>
+                  )}
+
+                  {userPreferences.enabledAnalytics.exerciseHydration && (
+                    <AnalyticsCard title="Exercise impact & hydration">
+                      <ResponsiveContainer width="100%" height={220}>
+                        <BarChart
+                          data={data.hydrationByDay.map((d) => ({
+                            date: new Date(d.date).toLocaleDateString(),
+                            hydration: d.total,
+                          }))}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                          <XAxis dataKey="date" tick={{ fontSize: 10 }} />
+                          <YAxis tick={{ fontSize: 10 }} />
+                          <Tooltip />
+                          <Legend />
+                          <Bar
+                            dataKey="hydration"
+                            name="Hydration (total)"
+                            fill="#22c55e"
+                            radius={[4, 4, 0, 0]}
+                          />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </AnalyticsCard>
+                  )}
+                </section>
+              )}
+
+              {/* Sleep & Weight Charts */}
+              {(userPreferences.enabledAnalytics.sleepGlucose ||
+                userPreferences.enabledAnalytics.weightTrend) && (
+                <section
+                  className={`grid gap-4 ${
+                    userPreferences.enabledAnalytics.sleepGlucose &&
+                    userPreferences.enabledAnalytics.weightTrend
+                      ? 'md:grid-cols-2'
+                      : 'md:grid-cols-1'
+                  }`}
+                >
+                  {userPreferences.enabledAnalytics.sleepGlucose && (
+                    <AnalyticsCard title="Sleep & glucose stability">
+                      <ResponsiveContainer width="100%" height={220}>
+                        <LineChart
+                          data={data.sleep.map((s) => ({
+                            date: new Date(s.timestamp).toLocaleDateString(),
+                            hours: s.hours,
+                            quality: s.quality ?? undefined,
+                          }))}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                          <XAxis dataKey="date" tick={{ fontSize: 10 }} />
+                          <YAxis tick={{ fontSize: 10 }} />
+                          <Tooltip />
+                          <Legend />
+                          <Line
+                            type="monotone"
+                            dataKey="hours"
+                            name="Hours slept"
+                            stroke="#38bdf8"
+                            strokeWidth={2}
+                            dot={false}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="quality"
+                            name="Quality (1-5)"
+                            stroke="#f97316"
+                            strokeWidth={2}
+                            dot={false}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </AnalyticsCard>
+                  )}
+
+                  {userPreferences.enabledAnalytics.weightTrend && (
+                    <AnalyticsCard title="Weight trend">
+                      <ResponsiveContainer width="100%" height={220}>
+                        <LineChart
+                          data={data.weightTrend.map((w) => ({
+                            time: new Date(w.timestamp).toLocaleDateString(),
+                            value: w.value,
+                          }))}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                          <XAxis dataKey="time" tick={{ fontSize: 10 }} />
+                          <YAxis tick={{ fontSize: 10 }} />
+                          <Tooltip />
+                          <Legend />
+                          <Line
+                            type="monotone"
+                            dataKey="value"
+                            name="Weight"
+                            stroke="#e5e7eb"
+                            strokeWidth={2}
+                            dot={false}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </AnalyticsCard>
+                  )}
+                </section>
+              )}
+
+              {/* Blood Pressure Charts */}
+              {data.bloodPressure.length > 0 &&
+                (userPreferences.enabledAnalytics.bloodPressureTrend ||
+                  userPreferences.enabledAnalytics.dailyBloodPressureSummary) && (
+                  <section
+                    className={`grid gap-4 ${
+                      userPreferences.enabledAnalytics.bloodPressureTrend &&
+                      userPreferences.enabledAnalytics.dailyBloodPressureSummary
+                        ? 'md:grid-cols-2'
+                        : 'md:grid-cols-1'
+                    }`}
+                  >
+                    {userPreferences.enabledAnalytics.bloodPressureTrend && (
+                      <AnalyticsCard title="Blood pressure trend">
+                        <ResponsiveContainer width="100%" height={220}>
+                          <LineChart
+                            data={data.bloodPressure.map((p) => ({
+                              time: new Date(p.timestamp).toLocaleString(),
+                              systolic: p.systolic,
+                              diastolic: p.diastolic,
+                            }))}
+                          >
+                            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                            <XAxis dataKey="time" tick={{ fontSize: 10 }} />
+                            <YAxis tick={{ fontSize: 10 }} />
+                            <Tooltip />
+                            <Legend />
+                            <Line
+                              type="monotone"
+                              dataKey="systolic"
+                              name="Systolic (mm Hg)"
+                              stroke="#ef4444"
+                              strokeWidth={2}
+                              dot={false}
+                            />
+                            <Line
+                              type="monotone"
+                              dataKey="diastolic"
+                              name="Diastolic (mm Hg)"
+                              stroke="#f97316"
+                              strokeWidth={2}
+                              dot={false}
+                            />
+                            {/* Reference lines for normal BP */}
+                            <Line
+                              type="monotone"
+                              dataKey={() => 120}
+                              name="Normal systolic"
+                              stroke="#22c55e"
+                              strokeWidth={1}
+                              strokeDasharray="5 5"
+                              dot={false}
+                              legendType="none"
+                            />
+                            <Line
+                              type="monotone"
+                              dataKey={() => 80}
+                              name="Normal diastolic"
+                              stroke="#22c55e"
+                              strokeWidth={1}
+                              strokeDasharray="5 5"
+                              dot={false}
+                              legendType="none"
+                            />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </AnalyticsCard>
+                    )}
+
+                    {userPreferences.enabledAnalytics.dailyBloodPressureSummary && (
+                      <AnalyticsCard title="Daily blood pressure summary">
+                        <ResponsiveContainer width="100%" height={220}>
+                          <LineChart
+                            data={data.dailyBloodPressureSummary.map((d) => ({
+                              date: new Date(d.date).toLocaleDateString(),
+                              systolicAvg: d.systolicAvg,
+                              systolicMin: d.systolicMin,
+                              systolicMax: d.systolicMax,
+                              diastolicAvg: d.diastolicAvg,
+                              diastolicMin: d.diastolicMin,
+                              diastolicMax: d.diastolicMax,
+                            }))}
+                          >
+                            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                            <XAxis dataKey="date" tick={{ fontSize: 10 }} />
+                            <YAxis tick={{ fontSize: 10 }} />
+                            <Tooltip />
+                            <Legend />
+                            <Line
+                              type="monotone"
+                              dataKey="systolicMin"
+                              stroke="#ef4444"
+                              strokeWidth={1.5}
+                              dot={false}
+                              name="Systolic min"
+                            />
+                            <Line
+                              type="monotone"
+                              dataKey="systolicAvg"
+                              stroke="#ef4444"
+                              strokeWidth={2}
+                              dot={false}
+                              name="Systolic avg"
+                            />
+                            <Line
+                              type="monotone"
+                              dataKey="systolicMax"
+                              stroke="#ef4444"
+                              strokeWidth={1.5}
+                              dot={false}
+                              name="Systolic max"
+                            />
+                            <Line
+                              type="monotone"
+                              dataKey="diastolicMin"
+                              stroke="#f97316"
+                              strokeWidth={1.5}
+                              dot={false}
+                              name="Diastolic min"
+                            />
+                            <Line
+                              type="monotone"
+                              dataKey="diastolicAvg"
+                              stroke="#f97316"
+                              strokeWidth={2}
+                              dot={false}
+                              name="Diastolic avg"
+                            />
+                            <Line
+                              type="monotone"
+                              dataKey="diastolicMax"
+                              stroke="#f97316"
+                              strokeWidth={1.5}
+                              dot={false}
+                              name="Diastolic max"
+                            />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </AnalyticsCard>
+                    )}
+                  </section>
+                )}
+
+              {/* BP vs Glucose & Correlation Charts */}
+              {data.bloodPressure.length > 0 &&
+                data.bloodGlucose.length > 0 &&
+                (userPreferences.enabledAnalytics.bpVsGlucose ||
+                  userPreferences.enabledAnalytics.correlationAnalysis) && (
+                  <section
+                    className={`grid gap-4 ${
+                      userPreferences.enabledAnalytics.bpVsGlucose &&
+                      userPreferences.enabledAnalytics.correlationAnalysis &&
+                      data.bpGlucoseCorrelation
+                        ? 'md:grid-cols-2'
+                        : 'md:grid-cols-1'
+                    }`}
+                  >
+                    {userPreferences.enabledAnalytics.bpVsGlucose && (
+                      <AnalyticsCard title="Blood pressure vs glucose">
+                        <ResponsiveContainer width="100%" height={220}>
+                          <LineChart
+                            data={mergeSeriesForDualAxisBP(
+                              data.bloodPressure.map((p) => ({
+                                time: new Date(p.timestamp).toISOString(),
+                                systolic: p.systolic,
+                              })),
+                              data.bloodGlucose.map((p) => ({
+                                time: new Date(p.timestamp).toISOString(),
+                                glucose: p.value,
+                              })),
+                            )}
+                          >
+                            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                            <XAxis
+                              dataKey="label"
+                              tick={{ fontSize: 10 }}
+                              interval="preserveStartEnd"
+                            />
+                            <YAxis
+                              yAxisId="left"
+                              tick={{ fontSize: 10 }}
+                              label={{ value: 'mm Hg', angle: -90, position: 'insideLeft' }}
+                            />
+                            <YAxis
+                              yAxisId="right"
+                              orientation="right"
+                              tick={{ fontSize: 10 }}
+                              label={{ value: 'mg/dL', angle: 90, position: 'insideRight' }}
+                            />
+                            <Tooltip />
+                            <Legend />
+                            <Line
+                              yAxisId="left"
+                              type="monotone"
+                              dataKey="systolic"
+                              name="Systolic BP (mm Hg)"
+                              stroke="#ef4444"
+                              strokeWidth={2}
+                              dot={false}
+                            />
+                            <Line
+                              yAxisId="right"
+                              type="monotone"
+                              dataKey="glucose"
+                              name="Glucose (mg/dL)"
+                              stroke="#38bdf8"
+                              strokeWidth={2}
+                              dot={false}
+                            />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </AnalyticsCard>
+                    )}
+
+                    {data.bpGlucoseCorrelation &&
+                      userPreferences.enabledAnalytics.correlationAnalysis && (
+                        <AnalyticsCard title="Correlation analysis">
+                          <div className="flex h-[220px] flex-col justify-center gap-3">
+                            <div className="text-center">
+                              <p className="text-3xl font-bold text-slate-900 dark:text-slate-100">
+                                r = {data.bpGlucoseCorrelation.coefficient.toFixed(2)}
+                              </p>
+                              <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
+                                Pearson correlation coefficient
+                              </p>
+                            </div>
+                            <div className="text-center">
+                              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                                {data.bpGlucoseCorrelation.strength.charAt(0).toUpperCase() +
+                                  data.bpGlucoseCorrelation.strength.slice(1)}{' '}
+                                {data.bpGlucoseCorrelation.direction} correlation
+                              </p>
+                              <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
+                                {data.bpGlucoseCorrelation.direction === 'positive'
+                                  ? 'Higher glucose tends to coincide with higher BP'
+                                  : 'Higher glucose tends to coincide with lower BP'}
+                              </p>
+                            </div>
+                            <div className="mt-2 rounded-lg bg-slate-100 p-3 dark:bg-slate-800">
+                              <p className="text-xs text-slate-600 dark:text-slate-400">
+                                <strong>Interpretation:</strong> Correlation strength is considered{' '}
+                                <strong>weak</strong> if |r| &lt; 0.4, <strong>moderate</strong> if
+                                0.4 ≤ |r| &lt; 0.7, and <strong>strong</strong> if |r| ≥ 0.7.
+                              </p>
+                            </div>
+                          </div>
+                        </AnalyticsCard>
                       )}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                      <XAxis dataKey="label" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
-                      <YAxis
-                        yAxisId="left"
-                        tick={{ fontSize: 10 }}
-                        label={{ value: 'mg/dL', angle: -90, position: 'insideLeft' }}
-                      />
-                      <YAxis
-                        yAxisId="right"
-                        orientation="right"
-                        tick={{ fontSize: 10 }}
-                        label={{ value: 'Units', angle: 90, position: 'insideRight' }}
-                      />
-                      <Tooltip />
-                      <Legend />
-                      <Line
-                        yAxisId="left"
-                        type="monotone"
-                        dataKey="glucose"
-                        name="Glucose (mg/dL)"
-                        stroke="#38bdf8"
-                        strokeWidth={2}
-                        dot={false}
-                      />
-                      <Line
-                        yAxisId="right"
-                        type="monotone"
-                        dataKey="insulinUnits"
-                        name="Insulin (units)"
-                        stroke="#a855f7"
-                        strokeWidth={2}
-                        dot={false}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </AnalyticsCard>
-
-                <AnalyticsCard title="Exercise impact & hydration">
-                  <ResponsiveContainer width="100%" height={220}>
-                    <BarChart
-                      data={data.hydrationByDay.map((d) => ({
-                        date: new Date(d.date).toLocaleDateString(),
-                        hydration: d.total,
-                      }))}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                      <XAxis dataKey="date" tick={{ fontSize: 10 }} />
-                      <YAxis tick={{ fontSize: 10 }} />
-                      <Tooltip />
-                      <Legend />
-                      <Bar
-                        dataKey="hydration"
-                        name="Hydration (total)"
-                        fill="#22c55e"
-                        radius={[4, 4, 0, 0]}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </AnalyticsCard>
-              </section>
-
-              <section className="grid gap-4 md:grid-cols-2">
-                <AnalyticsCard title="Sleep & glucose stability">
-                  <ResponsiveContainer width="100%" height={220}>
-                    <LineChart
-                      data={data.sleep.map((s) => ({
-                        date: new Date(s.timestamp).toLocaleDateString(),
-                        hours: s.hours,
-                        quality: s.quality ?? undefined,
-                      }))}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                      <XAxis dataKey="date" tick={{ fontSize: 10 }} />
-                      <YAxis tick={{ fontSize: 10 }} />
-                      <Tooltip />
-                      <Legend />
-                      <Line
-                        type="monotone"
-                        dataKey="hours"
-                        name="Hours slept"
-                        stroke="#38bdf8"
-                        strokeWidth={2}
-                        dot={false}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="quality"
-                        name="Quality (1-5)"
-                        stroke="#f97316"
-                        strokeWidth={2}
-                        dot={false}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </AnalyticsCard>
-
-                <AnalyticsCard title="Weight trend">
-                  <ResponsiveContainer width="100%" height={220}>
-                    <LineChart
-                      data={data.weightTrend.map((w) => ({
-                        time: new Date(w.timestamp).toLocaleDateString(),
-                        value: w.value,
-                      }))}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                      <XAxis dataKey="time" tick={{ fontSize: 10 }} />
-                      <YAxis tick={{ fontSize: 10 }} />
-                      <Tooltip />
-                      <Legend />
-                      <Line
-                        type="monotone"
-                        dataKey="value"
-                        name="Weight"
-                        stroke="#e5e7eb"
-                        strokeWidth={2}
-                        dot={false}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </AnalyticsCard>
-              </section>
+                  </section>
+                )}
 
               <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/60">
                 <h2 className="mb-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
@@ -651,6 +1022,52 @@ function mergeSeriesForDualAxis(
     (a, b) => new Date(a.time).getTime() - new Date(b.time).getTime(),
   );
 }
+
+function mergeSeriesForDualAxisBP(
+  bp: { time: string; systolic: number }[],
+  glucose: { time: string; glucose: number }[],
+): DualSeriesPointBP[] {
+  const byTime = new Map<string, DualSeriesPointBP>();
+
+  // First, add all BP points
+  bp.forEach((p) => {
+    const label = new Date(p.time).toLocaleString();
+    byTime.set(p.time, {
+      time: p.time,
+      label,
+      systolic: p.systolic,
+      glucose: null,
+    });
+  });
+
+  // Then, add glucose points (merge with existing or create new)
+  glucose.forEach((p) => {
+    const label = new Date(p.time).toLocaleString();
+    const existing = byTime.get(p.time);
+    if (existing) {
+      existing.glucose = p.glucose;
+    } else {
+      byTime.set(p.time, {
+        time: p.time,
+        label,
+        systolic: null,
+        glucose: p.glucose,
+      });
+    }
+  });
+
+  // Sort by time
+  return Array.from(byTime.values()).sort(
+    (a, b) => new Date(a.time).getTime() - new Date(b.time).getTime(),
+  );
+}
+
+type DualSeriesPointBP = {
+  time: string;
+  label: string;
+  systolic: number | null;
+  glucose: number | null;
+};
 
 type AnalyticsCardProps = {
   title: string;
