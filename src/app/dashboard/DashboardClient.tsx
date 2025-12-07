@@ -673,7 +673,7 @@ function formatActionTypeLabel(type: ActionTypeSchemaType) {
     case ActionType.HYDRATION:
       return 'Hydration';
     case ActionType.BLOOD_PRESSURE:
-      return 'Blood pressure';
+      return 'Blood Pressure';
   }
 }
 
