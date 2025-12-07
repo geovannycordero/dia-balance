@@ -14,6 +14,7 @@ export function Navigation() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const firstMenuItemRef = useRef<HTMLAnchorElement>(null);
+  const prevPathnameRef = useRef<string>(pathname);
 
   const handleSignOut = async () => {
     await signOut({ callbackUrl: '/auth/signin' });
@@ -63,12 +64,15 @@ export function Navigation() {
   }, [isMobileMenuOpen]);
 
   // Close menu when pathname changes (navigation occurred)
+  // This handles programmatic navigation and browser back/forward buttons
+  // Links already close the menu via onClick, but this ensures it closes for all navigation
   useEffect(() => {
-    if (isMobileMenuOpen) {
+    if (prevPathnameRef.current !== pathname && isMobileMenuOpen) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Closing menu on navigation is a valid UX pattern
       setIsMobileMenuOpen(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname]);
+    prevPathnameRef.current = pathname;
+  }, [pathname, isMobileMenuOpen]);
 
   if (!session?.user) {
     return null;
@@ -157,84 +161,86 @@ export function Navigation() {
       )}
 
       {/* Mobile Menu Drawer */}
-      <div
-        id="mobile-menu"
-        className={`fixed right-0 top-0 z-50 h-full w-80 max-w-[85vw] transform bg-white shadow-2xl transition-transform duration-300 ease-in-out dark:bg-slate-950 ${
-          isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full'
-        }`}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Navigation menu"
-      >
-        <div className="flex h-full flex-col">
-          {/* Drawer Header */}
-          <div className="flex items-center justify-between border-b border-slate-200 p-4 dark:border-slate-800">
-            <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Menu</h2>
-            <button
-              type="button"
-              onClick={closeMobileMenu}
-              className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
-              aria-label="Close menu"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          </div>
-
-          {/* Navigation Links */}
-          <nav className="flex-1 overflow-y-auto p-4" aria-label="Main navigation">
-            <ul className="space-y-2">
-              {navLinks.map((link, index) => {
-                const Icon = link.icon;
-                const active = isActive(link.href);
-                const isFirst = index === 0;
-                return (
-                  <li key={link.href}>
-                    <Link
-                      ref={isFirst ? firstMenuItemRef : null}
-                      href={link.href}
-                      onClick={closeMobileMenu}
-                      className={`flex min-h-[44px] items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition ${
-                        active
-                          ? 'bg-sky-500/20 text-sky-600 dark:text-sky-300'
-                          : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100'
-                      }`}
-                      aria-current={active ? 'page' : undefined}
-                    >
-                      <Icon className="h-5 w-5 flex-shrink-0" />
-                      {link.label}
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          </nav>
-
-          {/* User Info Section */}
-          <div className="border-t border-slate-200 p-4 dark:border-slate-800">
-            <div className="mb-4">
-              <p className="text-xs font-medium text-slate-600 dark:text-slate-400">Signed in as</p>
-              <p className="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">
-                {userEmail}
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
-              <DarkModeToggle />
+      {isMobileMenuOpen && (
+        <div
+          id="mobile-menu"
+          className="fixed right-0 top-0 z-50 h-full w-80 max-w-[85vw] transform bg-white shadow-2xl transition-transform duration-300 ease-in-out dark:bg-slate-950 translate-x-0"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Navigation menu"
+        >
+          <div className="flex h-full flex-col">
+            {/* Drawer Header */}
+            <div className="flex items-center justify-between border-b border-slate-200 p-4 dark:border-slate-800">
+              <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Menu</h2>
               <button
                 type="button"
-                onClick={() => {
-                  closeMobileMenu();
-                  handleSignOut();
-                }}
-                className="flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
-                aria-label="Sign out"
+                onClick={closeMobileMenu}
+                className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                aria-label="Close menu"
               >
-                <LogOut className="h-4 w-4" />
-                Sign out
+                <X className="h-5 w-5" />
               </button>
+            </div>
+
+            {/* Navigation Links */}
+            <nav className="flex-1 overflow-y-auto p-4" aria-label="Main navigation">
+              <ul className="space-y-2">
+                {navLinks.map((link, index) => {
+                  const Icon = link.icon;
+                  const active = isActive(link.href);
+                  const isFirst = index === 0;
+                  return (
+                    <li key={link.href}>
+                      <Link
+                        ref={isFirst ? firstMenuItemRef : null}
+                        href={link.href}
+                        onClick={closeMobileMenu}
+                        className={`flex min-h-[44px] items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition ${
+                          active
+                            ? 'bg-sky-500/20 text-sky-600 dark:text-sky-300'
+                            : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100'
+                        }`}
+                        aria-current={active ? 'page' : undefined}
+                      >
+                        <Icon className="h-5 w-5 flex-shrink-0" />
+                        {link.label}
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </nav>
+
+            {/* User Info Section */}
+            <div className="border-t border-slate-200 p-4 dark:border-slate-800">
+              <div className="mb-4">
+                <p className="text-xs font-medium text-slate-600 dark:text-slate-400">
+                  Signed in as
+                </p>
+                <p className="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">
+                  {userEmail}
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <DarkModeToggle />
+                <button
+                  type="button"
+                  onClick={() => {
+                    closeMobileMenu();
+                    handleSignOut();
+                  }}
+                  className="flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+                  aria-label="Sign out"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Sign out
+                </button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
     </>
   );
 }
