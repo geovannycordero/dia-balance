@@ -12,6 +12,7 @@ export const ActionTypeSchema = z.enum([
   ActionTypeEnum.SYMPTOMS,
   ActionTypeEnum.WEIGHT,
   ActionTypeEnum.HYDRATION,
+  ActionTypeEnum.BLOOD_PRESSURE,
 ]);
 
 export type ActionType = z.infer<typeof ActionTypeSchema>;
@@ -76,6 +77,12 @@ export const hydrationSchema = baseActionSchema.extend({
   hydrationAmount: z.number().positive(),
 });
 
+export const bloodPressureSchema = baseActionSchema.extend({
+  type: z.literal(ActionTypeEnum.BLOOD_PRESSURE),
+  bloodPressureSystolic: z.number().int().positive().max(300),
+  bloodPressureDiastolic: z.number().int().positive().max(200),
+});
+
 export const createActionSchema = z.discriminatedUnion('type', [
   bloodGlucoseSchema,
   insulinSchema,
@@ -86,6 +93,7 @@ export const createActionSchema = z.discriminatedUnion('type', [
   symptomsSchema,
   weightSchema,
   hydrationSchema,
+  bloodPressureSchema,
 ]);
 
 export type CreateActionInput = z.infer<typeof createActionSchema>;
@@ -112,6 +120,8 @@ export const updateActionSchema = z.object({
   weightValue: z.number().positive().optional(),
   weightUnit: z.string().optional(),
   hydrationAmount: z.number().positive().optional(),
+  bloodPressureSystolic: z.number().int().positive().max(300).optional(),
+  bloodPressureDiastolic: z.number().int().positive().max(200).optional(),
 });
 
 export type UpdateActionInput = z.infer<typeof updateActionSchema>;

@@ -16,6 +16,7 @@ enum ActionType {
   SYMPTOMS
   WEIGHT
   HYDRATION
+  BLOOD_PRESSURE
 }
 
 model User {
@@ -72,6 +73,9 @@ model Action {
   weightUnit  String?
 
   hydrationAmount Float?
+
+  bloodPressureSystolic  Float?
+  bloodPressureDiastolic Float?
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz

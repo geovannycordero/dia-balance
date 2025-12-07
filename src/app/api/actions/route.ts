@@ -77,6 +77,10 @@ export async function POST(req: Request) {
       weightValue: 'weightValue' in data ? (data.weightValue ?? undefined) : undefined,
       weightUnit: 'weightUnit' in data ? (data.weightUnit ?? undefined) : undefined,
       hydrationAmount: 'hydrationAmount' in data ? (data.hydrationAmount ?? undefined) : undefined,
+      bloodPressureSystolic:
+        'bloodPressureSystolic' in data ? (data.bloodPressureSystolic ?? undefined) : undefined,
+      bloodPressureDiastolic:
+        'bloodPressureDiastolic' in data ? (data.bloodPressureDiastolic ?? undefined) : undefined,
     },
   });
 
