@@ -26,23 +26,35 @@ function isProtectedPath(pathname: string): boolean {
 }
 
 function isPublicPath(pathname: string): boolean {
-  const publicPaths = ['/auth/signin', '/auth/error', '/auth/verify-request', '/api/auth'];
+  const publicPaths = ['/auth/signin', '/auth/error', '/auth/verify-request'];
   return publicPaths.some((path) => pathname.startsWith(path));
+}
+
+function isApiRoute(pathname: string): boolean {
+  return pathname.startsWith('/api/');
 }
 
 export default async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
+  // Skip middleware for API routes (except auth which is handled by NextAuth)
+  if (isApiRoute(pathname)) {
+    return NextResponse.next();
+  }
+
+  // Allow public paths
   if (isPublicPath(pathname)) {
     return NextResponse.next();
   }
 
+  // Handle root path redirect
   if (pathname === '/') {
     const token = await getValidToken(request);
     const redirectUrl = token ? '/dashboard' : '/auth/signin';
     return NextResponse.redirect(new URL(redirectUrl, request.url));
   }
 
+  // Protect dashboard and analytics routes
   if (isProtectedPath(pathname)) {
     const token = await getValidToken(request);
     if (!token) {
@@ -54,5 +66,14 @@ export default async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/', '/dashboard/:path*', '/analytics/:path*'],
+  matcher: [
+    /*
+     * Match all request paths except for the ones starting with:
+     * - api/auth (NextAuth.js routes)
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     */
+    '/((?!api/auth|_next/static|_next/image|favicon.ico).*)',
+  ],
 };
