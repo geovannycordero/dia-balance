@@ -13,11 +13,13 @@ import {
 import { getCurrentLocalDateTime, localToUTC, utcToLocal } from '@/lib/date-utils';
 import { useOnlineStatus } from '@/lib/use-online-status';
 
+import type { UserPreferences } from '@/lib/user-preferences';
 import type { Action } from '@prisma/client';
 
 type DashboardClientProps = {
   initialActions: Action[];
-  userEmail: string;
+  userName: string;
+  userPreferences: UserPreferences;
 };
 
 type FormState = {
@@ -46,8 +48,8 @@ type FormState = {
   bloodPressureDiastolic?: string;
 };
 
-const defaultFormState = (): FormState => ({
-  type: ActionType.BLOOD_GLUCOSE,
+const defaultFormState = (enabledActionTypes: ActionType[]): FormState => ({
+  type: (enabledActionTypes[0] ?? ActionType.BLOOD_GLUCOSE) as ActionTypeSchemaType,
   timestamp: getCurrentLocalDateTime(),
   notes: '',
 });
@@ -56,13 +58,17 @@ type QueuedAction = CreateActionInput & { queuedAt: string };
 
 const PENDING_KEY = 'dia-balance-pending-actions';
 
-export function DashboardClient({ initialActions, userEmail }: DashboardClientProps) {
+export function DashboardClient({
+  initialActions,
+  userName,
+  userPreferences,
+}: DashboardClientProps) {
   const [actions, setActions] = useState<Action[]>(initialActions);
   const [isLogging, setIsLogging] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [form, setForm] = useState<FormState>(defaultFormState);
+  const [form, setForm] = useState<FormState>(defaultFormState(userPreferences.enabledActionTypes));
   const [editingActionId, setEditingActionId] = useState<string | null>(null);
   const [deletingActionId, setDeletingActionId] = useState<string | null>(null);
   const isOnline = useOnlineStatus();
@@ -213,7 +219,7 @@ export function DashboardClient({ initialActions, userEmail }: DashboardClientPr
   };
 
   const handleOpenLogger = () => {
-    setForm(defaultFormState());
+    setForm(defaultFormState(userPreferences.enabledActionTypes));
     setError(null);
     setEditingActionId(null);
     setIsLogging(true);
@@ -432,7 +438,7 @@ export function DashboardClient({ initialActions, userEmail }: DashboardClientPr
               <h1 className="mt-1 text-2xl font-semibold tracking-tight">Dashboard</h1>
               <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
                 Recent health actions for{' '}
-                <span className="font-medium text-slate-900 dark:text-slate-100">{userEmail}</span>
+                <span className="font-medium text-slate-900 dark:text-slate-100">{userName}</span>
               </p>
             </div>
           </header>
@@ -553,11 +559,13 @@ export function DashboardClient({ initialActions, userEmail }: DashboardClientPr
                           updateField('type', e.target.value as ActionTypeSchemaType)
                         }
                       >
-                        {ActionTypeSchema.options.map((option) => (
-                          <option key={option} value={option}>
-                            {formatActionTypeLabel(option)}
-                          </option>
-                        ))}
+                        {ActionTypeSchema.options
+                          .filter((option) => userPreferences.enabledActionTypes.includes(option))
+                          .map((option) => (
+                            <option key={option} value={option}>
+                              {formatActionTypeLabel(option)}
+                            </option>
+                          ))}
                       </select>
                     </div>
                     <div>

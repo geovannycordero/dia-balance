@@ -25,6 +25,7 @@ model User {
   name        String?
   isActive    Boolean @default(true)
   isVerified  Boolean @default(false)
+  preferences Json?
 
   actions   Action[]
   createdAt DateTime @default(now()) @db.Timestamptz

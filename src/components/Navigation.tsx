@@ -1,6 +1,6 @@
 'use client';
 
-import { BarChart3, Home, LogOut } from 'lucide-react';
+import { BarChart3, Home, LogOut, Settings } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { signOut, useSession } from 'next-auth/react';
@@ -46,6 +46,17 @@ export function Navigation() {
           >
             <BarChart3 className="h-4 w-4" />
             Analytics
+          </Link>
+          <Link
+            href="/settings"
+            className={`flex items-center gap-2 rounded-xl px-3 py-1.5 text-sm font-medium transition ${
+              pathname === '/settings'
+                ? 'bg-sky-500/20 text-sky-600 dark:text-sky-300'
+                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-900 dark:hover:text-slate-200'
+            }`}
+          >
+            <Settings className="h-4 w-4" />
+            Settings
           </Link>
         </div>
 
