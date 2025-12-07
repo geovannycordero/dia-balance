@@ -24,6 +24,8 @@ jobs:
 
       - name: Install dependencies
         run: yarn install --frozen-lockfile
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/dia-balance_db
 
       - name: Generate Prisma client
         run: yarn prisma generate
@@ -54,6 +56,8 @@ jobs:
 
       - name: Install dependencies
         run: yarn install --frozen-lockfile
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/dia-balance_db
 
       - name: Generate Prisma client
         run: yarn prisma generate
@@ -91,6 +95,8 @@ jobs:
 
       - name: Install dependencies
         run: yarn install --frozen-lockfile
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/dia-balance_db
 
       - name: Run security audit
         run: yarn audit --level moderate
@@ -133,6 +139,8 @@ jobs:
 
       - name: Install dependencies
         run: yarn install --frozen-lockfile
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/dia-balance_db
 
       - name: Run database migrations
         run: yarn prisma migrate deploy
@@ -163,6 +171,8 @@ jobs:
 
       - name: Install dependencies
         run: yarn install --frozen-lockfile
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/dia-balance_db
 
       - name: Run pending migrations
         run: yarn prisma migrate deploy
