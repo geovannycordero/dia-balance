@@ -10,7 +10,12 @@ import {
   type ActionType as ActionTypeSchemaType,
   type CreateActionInput,
 } from '@/lib/action-schemas';
-import { getCurrentLocalDateTime, localToUTC, utcToLocal } from '@/lib/date-utils';
+import {
+  formatDateTimeDDMMYYYY,
+  getCurrentLocalDateTime,
+  localToUTC,
+  utcToLocal,
+} from '@/lib/date-utils';
 import { useOnlineStatus } from '@/lib/use-online-status';
 
 import type { UserPreferences } from '@/lib/user-preferences';
@@ -155,13 +160,16 @@ export function DashboardClient({
     })();
   }, [isOnline, addToast]);
 
-  const sortedActions = useMemo(
-    () =>
-      [...actions].sort(
-        (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
-      ),
-    [actions],
-  );
+  const sortedActions = useMemo(() => {
+    // Calculate 24 hours ago
+    const twentyFourHoursAgo = new Date();
+    twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
+
+    // Filter actions from last 24 hours and sort
+    return [...actions]
+      .filter((action) => new Date(action.timestamp) >= twentyFourHoursAgo)
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  }, [actions]);
 
   const populateFormFromAction = (action: Action) => {
     // Convert UTC timestamp from database to local datetime-local format
@@ -495,7 +503,7 @@ export function DashboardClient({
                       </div>
                       <div className="flex flex-col items-end gap-1">
                         <p className="text-xs text-slate-500 dark:text-slate-500">
-                          {new Date(action.timestamp).toLocaleString()}
+                          {formatDateTimeDDMMYYYY(action.timestamp)}
                         </p>
                         <div className="flex gap-2">
                           <button

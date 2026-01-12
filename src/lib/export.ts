@@ -1,13 +1,39 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
-import { formatDateForDisplay, formatDateOnly } from './date-utils';
-
 type JsPDFWithAutoTable = jsPDF & {
   lastAutoTable: {
     finalY: number;
   };
 };
+
+/**
+ * Format a date to dd/mm/YYYY format
+ * @param date - Date object or ISO string
+ * @returns Formatted date string in dd/mm/YYYY format
+ */
+function formatDateDDMMYYYY(date: Date | string): string {
+  const dateObj = typeof date === 'string' ? new Date(date) : date;
+  const day = String(dateObj.getDate()).padStart(2, '0');
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const year = dateObj.getFullYear();
+  return `${day}/${month}/${year}`;
+}
+
+/**
+ * Format a date with time to dd/mm/YYYY HH:mm format
+ * @param date - Date object or ISO string
+ * @returns Formatted date string in dd/mm/YYYY HH:mm format
+ */
+function formatDateTimeDDMMYYYY(date: Date | string): string {
+  const dateObj = typeof date === 'string' ? new Date(date) : date;
+  const day = String(dateObj.getDate()).padStart(2, '0');
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const year = dateObj.getFullYear();
+  const hours = String(dateObj.getHours()).padStart(2, '0');
+  const minutes = String(dateObj.getMinutes()).padStart(2, '0');
+  return `${day}/${month}/${year} ${hours}:${minutes}`;
+}
 
 type AnalyticsData = {
   range: {
@@ -57,8 +83,8 @@ export function exportToPDF(data: AnalyticsData): void {
 
   // Date range - convert UTC dates to local timezone for display
   doc.setFontSize(12);
-  const fromDate = formatDateOnly(data.range.from);
-  const toDate = formatDateOnly(data.range.to);
+  const fromDate = formatDateDDMMYYYY(data.range.from);
+  const toDate = formatDateDDMMYYYY(data.range.to);
   doc.text(`Period: ${fromDate} to ${toDate}`, margin, yPos);
   yPos += 15;
 
@@ -136,60 +162,48 @@ export function exportToPDF(data: AnalyticsData): void {
     doc.text('Blood Glucose Readings', margin, yPos);
     yPos += 8;
 
-    const glucoseData = data.bloodGlucose.map((r) => [
-      formatDateForDisplay(r.timestamp),
-      `${r.value} mg/dL`,
-      r.context ?? '-',
-    ]);
+    // Group readings by day and prepare data with day tracking
+    const glucoseData: string[][] = [];
+    const dayIndices: number[] = []; // Track which day each row belongs to
+    let currentDay = '';
+    let dayIndex = -1; // Start at -1 so first day becomes 0 (even, white)
+
+    data.bloodGlucose.forEach((r) => {
+      const dateObj = new Date(r.timestamp);
+      const dayKey = `${dateObj.getFullYear()}-${dateObj.getMonth()}-${dateObj.getDate()}`;
+
+      // If day changed, increment day index
+      if (dayKey !== currentDay) {
+        currentDay = dayKey;
+        dayIndex++;
+      }
+
+      glucoseData.push([formatDateTimeDDMMYYYY(r.timestamp), `${r.value} mg/dL`, r.context ?? '-']);
+      dayIndices.push(dayIndex);
+    });
 
     autoTable(doc, {
       startY: yPos,
       head: [['Timestamp', 'Value', 'Context']],
-      body: glucoseData.slice(0, 20), // Limit to first 20 entries
-      theme: 'striped',
+      body: glucoseData,
+      theme: 'plain',
       headStyles: { fillColor: [56, 189, 248] },
       margin: { left: margin, right: margin },
+      didParseCell: function (data) {
+        // Apply alternating background colors by day (light gray scale)
+        if (data.row.index >= 0 && dayIndices[data.row.index] !== undefined) {
+          const dayIdx = dayIndices[data.row.index];
+          // Alternate between white and light gray for different days
+          if (dayIdx % 2 === 0) {
+            data.cell.styles.fillColor = [255, 255, 255]; // White
+          } else {
+            data.cell.styles.fillColor = [240, 240, 240]; // Light gray
+          }
+        }
+      },
     });
 
     yPos = doc.lastAutoTable.finalY + 10;
-    if (data.bloodGlucose.length > 20) {
-      doc.setFontSize(10);
-      doc.text(`Showing first 20 of ${data.bloodGlucose.length} readings`, margin, yPos);
-      yPos += 10;
-    }
-  }
-
-  // Insulin Data
-  if (data.insulin.length > 0) {
-    if (yPos > doc.internal.pageSize.getHeight() - 40) {
-      doc.addPage();
-      yPos = margin;
-    }
-    doc.setFontSize(14);
-    doc.text('Insulin Doses', margin, yPos);
-    yPos += 8;
-
-    const insulinData = data.insulin.map((r) => [
-      new Date(r.timestamp).toLocaleString(),
-      `${r.units} units`,
-      r.insulinType ?? '-',
-    ]);
-
-    autoTable(doc, {
-      startY: yPos,
-      head: [['Timestamp', 'Units', 'Type']],
-      body: insulinData.slice(0, 20),
-      theme: 'striped',
-      headStyles: { fillColor: [168, 85, 247] },
-      margin: { left: margin, right: margin },
-    });
-
-    yPos = doc.lastAutoTable.finalY + 10;
-    if (data.insulin.length > 20) {
-      doc.setFontSize(10);
-      doc.text(`Showing first 20 of ${data.insulin.length} doses`, margin, yPos);
-      yPos += 10;
-    }
   }
 
   // Blood Pressure Data
@@ -203,7 +217,7 @@ export function exportToPDF(data: AnalyticsData): void {
     yPos += 8;
 
     const bpData = data.bloodPressure.map((r) => [
-      formatDateForDisplay(r.timestamp),
+      formatDateTimeDDMMYYYY(r.timestamp),
       `${r.systolic}/${r.diastolic} mm Hg`,
       r.category === 'normal'
         ? 'Normal'
@@ -232,34 +246,34 @@ export function exportToPDF(data: AnalyticsData): void {
       yPos += 10;
     }
 
-    // Daily BP Summary
-    if (data.dailyBloodPressureSummary.length > 0) {
-      if (yPos > doc.internal.pageSize.getHeight() - 40) {
-        doc.addPage();
-        yPos = margin;
-      }
-      doc.setFontSize(14);
-      doc.text('Daily Blood Pressure Summary', margin, yPos);
-      yPos += 8;
+    // Daily BP Summary - Hidden for now
+    // if (data.dailyBloodPressureSummary.length > 0) {
+    //   if (yPos > doc.internal.pageSize.getHeight() - 40) {
+    //     doc.addPage();
+    //     yPos = margin;
+    //   }
+    //   doc.setFontSize(14);
+    //   doc.text('Daily Blood Pressure Summary', margin, yPos);
+    //   yPos += 8;
 
-      const dailyBpData = data.dailyBloodPressureSummary.map((d) => [
-        formatDateOnly(d.date),
-        `${d.systolicAvg.toFixed(0)}/${d.diastolicAvg.toFixed(0)}`,
-        `${d.systolicMin}-${d.systolicMax} / ${d.diastolicMin}-${d.diastolicMax}`,
-        `${d.systolicCount} readings`,
-      ]);
+    //   const dailyBpData = data.dailyBloodPressureSummary.map((d) => [
+    //     formatDateOnly(d.date),
+    //     `${d.systolicAvg.toFixed(0)}/${d.diastolicAvg.toFixed(0)}`,
+    //     `${d.systolicMin}-${d.systolicMax} / ${d.diastolicMin}-${d.diastolicMax}`,
+    //     `${d.systolicCount} readings`,
+    //   ]);
 
-      autoTable(doc, {
-        startY: yPos,
-        head: [['Date', 'Avg (S/D)', 'Range (S/D)', 'Count']],
-        body: dailyBpData,
-        theme: 'striped',
-        headStyles: { fillColor: [239, 68, 68] },
-        margin: { left: margin, right: margin },
-      });
+    //   autoTable(doc, {
+    //     startY: yPos,
+    //     head: [['Date', 'Avg (S/D)', 'Range (S/D)', 'Count']],
+    //     body: dailyBpData,
+    //     theme: 'striped',
+    //     headStyles: { fillColor: [239, 68, 68] },
+    //     margin: { left: margin, right: margin },
+    //   });
 
-      yPos = doc.lastAutoTable.finalY + 15;
-    }
+    //   yPos = doc.lastAutoTable.finalY + 15;
+    // }
 
     // Correlation Analysis
     if (data.bpGlucoseCorrelation) {
@@ -301,6 +315,39 @@ export function exportToPDF(data: AnalyticsData): void {
     }
   }
 
+  // Insulin Data
+  if (data.insulin.length > 0) {
+    if (yPos > doc.internal.pageSize.getHeight() - 40) {
+      doc.addPage();
+      yPos = margin;
+    }
+    doc.setFontSize(14);
+    doc.text('Insulin Doses', margin, yPos);
+    yPos += 8;
+
+    const insulinData = data.insulin.map((r) => [
+      formatDateTimeDDMMYYYY(r.timestamp),
+      `${r.units} units`,
+      r.insulinType ?? '-',
+    ]);
+
+    autoTable(doc, {
+      startY: yPos,
+      head: [['Timestamp', 'Units', 'Type']],
+      body: insulinData.slice(0, 20),
+      theme: 'striped',
+      headStyles: { fillColor: [168, 85, 247] },
+      margin: { left: margin, right: margin },
+    });
+
+    yPos = doc.lastAutoTable.finalY + 10;
+    if (data.insulin.length > 20) {
+      doc.setFontSize(10);
+      doc.text(`Showing first 20 of ${data.insulin.length} doses`, margin, yPos);
+      yPos += 10;
+    }
+  }
+
   // Insights
   if (data.insights.length > 0) {
     if (yPos > doc.internal.pageSize.getHeight() - 60) {
@@ -312,13 +359,26 @@ export function exportToPDF(data: AnalyticsData): void {
     yPos += 8;
 
     doc.setFontSize(11);
+    const maxWidth = pageWidth - margin * 2 - 10; // Account for bullet point and margin
+    const lineHeight = 6;
+
     data.insights.forEach((insight) => {
-      if (yPos > doc.internal.pageSize.getHeight() - 20) {
-        doc.addPage();
-        yPos = margin;
-      }
-      doc.text(`• ${insight}`, margin + 5, yPos);
-      yPos += 7;
+      const bulletText = `• ${insight}`;
+
+      // Split text into lines that fit within maxWidth
+      const lines = doc.splitTextToSize(bulletText, maxWidth);
+
+      lines.forEach((line: string) => {
+        if (yPos > doc.internal.pageSize.getHeight() - 20) {
+          doc.addPage();
+          yPos = margin;
+        }
+        doc.text(line, margin + 5, yPos);
+        yPos += lineHeight;
+      });
+
+      // Add extra spacing between insights
+      yPos += 2;
     });
   }
 
@@ -333,7 +393,7 @@ export function exportToPDF(data: AnalyticsData): void {
       doc.internal.pageSize.getHeight() - 10,
     );
     doc.text(
-      `Generated on ${new Date().toLocaleString()}`,
+      `Generated on ${formatDateTimeDDMMYYYY(new Date())}`,
       margin,
       doc.internal.pageSize.getHeight() - 10,
     );
