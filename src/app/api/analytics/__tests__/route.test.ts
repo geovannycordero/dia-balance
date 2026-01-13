@@ -1,4 +1,3 @@
-import { subDays, startOfDay, endOfDay } from 'date-fns'
 import { getServerSession } from 'next-auth/next'
 
 import { ActionType } from '@/app/constants/action-types'
@@ -42,6 +41,7 @@ jest.mock('@/lib/date-utils', () => ({
 }))
 
 const mockGetServerSession = getServerSession as jest.MockedFunction<typeof getServerSession>
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockPrisma = prisma as any
 
 describe('/api/analytics', () => {
@@ -55,6 +55,7 @@ describe('/api/analytics', () => {
 
   beforeEach(() => {
     jest.clearAllMocks()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mockGetServerSession.mockResolvedValue(mockSession as any)
   })
 
@@ -73,6 +74,7 @@ describe('/api/analytics', () => {
     it('should return 401 if user id is missing', async () => {
       mockGetServerSession.mockResolvedValue({
         user: { email: 'test@example.com' },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any)
 
       const request = new Request('http://localhost/api/analytics')
@@ -84,6 +86,7 @@ describe('/api/analytics', () => {
     })
 
     it('should use default date range (last 7 days) when no params provided', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const mockActions: any[] = []
       mockPrisma.action.findMany.mockResolvedValue(mockActions)
 
@@ -98,6 +101,7 @@ describe('/api/analytics', () => {
     })
 
     it('should use custom date range when from and to params provided', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const mockActions: any[] = []
       mockPrisma.action.findMany.mockResolvedValue(mockActions)
 
@@ -627,6 +631,267 @@ describe('/api/analytics', () => {
         insight.includes('Medication entries'),
       )
       expect(medicationInsight).toBeDefined()
+    })
+
+    it('should return correct structure when no data exists', async () => {
+      mockPrisma.action.findMany.mockResolvedValue([])
+
+      const request = new Request('http://localhost/api/analytics?from=2024-01-01&to=2024-01-01')
+      const response = await GET(request)
+      const data = await response.json()
+
+      expect(response.status).toBe(200)
+      expect(data.bloodGlucose).toEqual([])
+      expect(data.insulin).toEqual([])
+      expect(data.exercise).toEqual([])
+      expect(data.sleep).toEqual([])
+      expect(data.weight).toEqual([])
+      expect(data.hydration).toEqual([])
+      expect(data.bloodPressure).toEqual([])
+      expect(data.dailyGlucoseSummary).toEqual([])
+      expect(data.dailyBloodPressureSummary).toEqual([])
+      expect(data.hydrationByDay).toEqual([])
+      expect(data.weightTrend).toEqual([])
+      expect(data.bpGlucoseCorrelation).toBeNull()
+      expect(Array.isArray(data.insights)).toBe(true)
+    })
+
+    it('should handle invalid date parameters gracefully', async () => {
+      mockPrisma.action.findMany.mockResolvedValue([])
+
+      const request = new Request(
+        'http://localhost/api/analytics?from=invalid-date&to=also-invalid',
+      )
+      const response = await GET(request)
+
+      // Should still return 200 but use default date range
+      expect(response.status).toBe(200)
+      expect(mockPrisma.action.findMany).toHaveBeenCalled()
+    })
+
+    it('should calculate correlation with minimum data points', async () => {
+      const mockActions = [
+        {
+          id: '1',
+          userId: mockUserId,
+          type: ActionType.BLOOD_PRESSURE,
+          timestamp: new Date('2024-01-01T10:00:00Z'),
+          bloodPressureSystolic: 120,
+          bloodPressureDiastolic: 80,
+        },
+        {
+          id: '2',
+          userId: mockUserId,
+          type: ActionType.BLOOD_GLUCOSE,
+          timestamp: new Date('2024-01-01T10:15:00Z'),
+          bloodGlucose: 100,
+        },
+        {
+          id: '3',
+          userId: mockUserId,
+          type: ActionType.BLOOD_PRESSURE,
+          timestamp: new Date('2024-01-01T14:00:00Z'),
+          bloodPressureSystolic: 130,
+          bloodPressureDiastolic: 85,
+        },
+        {
+          id: '4',
+          userId: mockUserId,
+          type: ActionType.BLOOD_GLUCOSE,
+          timestamp: new Date('2024-01-01T14:15:00Z'),
+          bloodGlucose: 120,
+        },
+        {
+          id: '5',
+          userId: mockUserId,
+          type: ActionType.BLOOD_PRESSURE,
+          timestamp: new Date('2024-01-01T18:00:00Z'),
+          bloodPressureSystolic: 125,
+          bloodPressureDiastolic: 82,
+        },
+        {
+          id: '6',
+          userId: mockUserId,
+          type: ActionType.BLOOD_GLUCOSE,
+          timestamp: new Date('2024-01-01T18:15:00Z'),
+          bloodGlucose: 110,
+        },
+      ]
+
+      mockPrisma.action.findMany.mockResolvedValue(mockActions)
+
+      const request = new Request('http://localhost/api/analytics?from=2024-01-01&to=2024-01-01')
+      const response = await GET(request)
+      const data = await response.json()
+
+      expect(response.status).toBe(200)
+      expect(data.bpGlucoseCorrelation).toBeDefined()
+      expect(data.bpGlucoseCorrelation).not.toBeNull()
+      expect(data.bpGlucoseCorrelation?.coefficient).toBeDefined()
+      expect(data.bpGlucoseCorrelation?.strength).toBeDefined()
+      expect(data.bpGlucoseCorrelation?.direction).toBeDefined()
+    })
+
+    it('should categorize blood pressure correctly in all ranges', async () => {
+      const mockActions = [
+        {
+          id: '1',
+          userId: mockUserId,
+          type: ActionType.BLOOD_PRESSURE,
+          timestamp: new Date('2024-01-01T10:00:00Z'),
+          bloodPressureSystolic: 110,
+          bloodPressureDiastolic: 70,
+        },
+        {
+          id: '2',
+          userId: mockUserId,
+          type: ActionType.BLOOD_PRESSURE,
+          timestamp: new Date('2024-01-01T11:00:00Z'),
+          bloodPressureSystolic: 125,
+          bloodPressureDiastolic: 75,
+        },
+        {
+          id: '3',
+          userId: mockUserId,
+          type: ActionType.BLOOD_PRESSURE,
+          timestamp: new Date('2024-01-01T12:00:00Z'),
+          bloodPressureSystolic: 135,
+          bloodPressureDiastolic: 85,
+        },
+        {
+          id: '4',
+          userId: mockUserId,
+          type: ActionType.BLOOD_PRESSURE,
+          timestamp: new Date('2024-01-01T13:00:00Z'),
+          bloodPressureSystolic: 145,
+          bloodPressureDiastolic: 95,
+        },
+        {
+          id: '5',
+          userId: mockUserId,
+          type: ActionType.BLOOD_PRESSURE,
+          timestamp: new Date('2024-01-01T14:00:00Z'),
+          bloodPressureSystolic: 185,
+          bloodPressureDiastolic: 125,
+        },
+      ]
+
+      mockPrisma.action.findMany.mockResolvedValue(mockActions)
+
+      const request = new Request('http://localhost/api/analytics?from=2024-01-01&to=2024-01-01')
+      const response = await GET(request)
+      const data = await response.json()
+
+      expect(response.status).toBe(200)
+      expect(data.bloodPressure).toHaveLength(5)
+      expect(data.bloodPressure[0].category).toBe('normal')
+      expect(data.bloodPressure[1].category).toBe('elevated')
+      expect(data.bloodPressure[2].category).toBe('hypertension-stage-1')
+      expect(data.bloodPressure[3].category).toBe('hypertension-stage-2')
+      expect(data.bloodPressure[4].category).toBe('crisis')
+    })
+
+    it('should calculate daily summaries correctly with multiple days', async () => {
+      const mockActions = [
+        {
+          id: '1',
+          userId: mockUserId,
+          type: ActionType.BLOOD_GLUCOSE,
+          timestamp: new Date('2024-01-01T10:00:00Z'),
+          bloodGlucose: 100,
+        },
+        {
+          id: '2',
+          userId: mockUserId,
+          type: ActionType.BLOOD_GLUCOSE,
+          timestamp: new Date('2024-01-01T14:00:00Z'),
+          bloodGlucose: 120,
+        },
+        {
+          id: '3',
+          userId: mockUserId,
+          type: ActionType.BLOOD_GLUCOSE,
+          timestamp: new Date('2024-01-02T10:00:00Z'),
+          bloodGlucose: 110,
+        },
+        {
+          id: '4',
+          userId: mockUserId,
+          type: ActionType.BLOOD_GLUCOSE,
+          timestamp: new Date('2024-01-02T14:00:00Z'),
+          bloodGlucose: 130,
+        },
+      ]
+
+      mockPrisma.action.findMany.mockResolvedValue(mockActions)
+
+      const request = new Request('http://localhost/api/analytics?from=2024-01-01&to=2024-01-02')
+      const response = await GET(request)
+      const data = await response.json()
+
+      expect(response.status).toBe(200)
+      expect(data.dailyGlucoseSummary).toBeDefined()
+      expect(data.dailyGlucoseSummary.length).toBe(2)
+      expect(data.dailyGlucoseSummary[0].count).toBe(2)
+      expect(data.dailyGlucoseSummary[0].avg).toBe(110)
+      expect(data.dailyGlucoseSummary[1].count).toBe(2)
+      expect(data.dailyGlucoseSummary[1].avg).toBe(120)
+    })
+
+    it('should generate insights correctly with different data combinations', async () => {
+      const mockActions = [
+        {
+          id: '1',
+          userId: mockUserId,
+          type: ActionType.BLOOD_GLUCOSE,
+          timestamp: new Date('2024-01-01T10:00:00Z'),
+          bloodGlucose: 120,
+        },
+        {
+          id: '2',
+          userId: mockUserId,
+          type: ActionType.EXERCISE,
+          timestamp: new Date('2024-01-01T11:00:00Z'),
+          exerciseType: 'running',
+          exerciseDuration: 30,
+          exerciseIntensity: 'moderate',
+        },
+        {
+          id: '3',
+          userId: mockUserId,
+          type: ActionType.WEIGHT,
+          timestamp: new Date('2024-01-01T12:00:00Z'),
+          weightValue: 75.0,
+          weightUnit: 'kg',
+        },
+        {
+          id: '4',
+          userId: mockUserId,
+          type: ActionType.WEIGHT,
+          timestamp: new Date('2024-01-07T12:00:00Z'),
+          weightValue: 74.0,
+          weightUnit: 'kg',
+        },
+      ]
+
+      mockPrisma.action.findMany.mockResolvedValue(mockActions)
+
+      const request = new Request('http://localhost/api/analytics?from=2024-01-01&to=2024-01-07')
+      const response = await GET(request)
+      const data = await response.json()
+
+      expect(response.status).toBe(200)
+      expect(data.insights).toBeDefined()
+      expect(Array.isArray(data.insights)).toBe(true)
+      expect(data.insights.length).toBeGreaterThan(0)
+      // Should have insight about exercise and glucose
+      const exerciseInsight = data.insights.find((insight: string) =>
+        insight.includes('exercise'),
+      )
+      expect(exerciseInsight).toBeDefined()
+      // Should have insight about weight change
+      const weightInsight = data.insights.find((insight: string) => insight.includes('weight'))
+      expect(weightInsight).toBeDefined()
     })
   })
 })

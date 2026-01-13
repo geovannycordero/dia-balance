@@ -33,6 +33,7 @@ jest.mock('@/lib/prisma', () => ({
 }))
 
 const mockGetServerSession = getServerSession as jest.MockedFunction<typeof getServerSession>
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockPrisma = prisma as any
 
 describe('/api/settings', () => {
@@ -46,6 +47,7 @@ describe('/api/settings', () => {
 
   beforeEach(() => {
     jest.clearAllMocks()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mockGetServerSession.mockResolvedValue(mockSession as any)
   })
 
@@ -61,6 +63,7 @@ describe('/api/settings', () => {
     })
 
     it('should return 401 if user email is missing', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       mockGetServerSession.mockResolvedValue({ user: {} } as any)
 
       const response = await GET()
@@ -73,6 +76,7 @@ describe('/api/settings', () => {
     it('should return 401 if user id is missing', async () => {
       mockGetServerSession.mockResolvedValue({
         user: { email: 'test@example.com' },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any)
 
       const response = await GET()
@@ -412,7 +416,7 @@ describe('/api/settings', () => {
       })
 
       const response = await PATCH(request)
-      const data = await response.json()
+      await response.json()
 
       expect(response.status).toBe(200)
       expect(mockPrisma.user.update).toHaveBeenCalledWith({
@@ -425,6 +429,172 @@ describe('/api/settings', () => {
           preferences: true,
         },
       })
+    })
+
+    it('should validate name maximum length of 100 characters', async () => {
+      const request = new Request('http://localhost/api/settings', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          name: 'a'.repeat(101), // 101 characters, exceeds max
+        }),
+      })
+
+      const response = await PATCH(request)
+      const data = await response.json()
+
+      expect(response.status).toBe(400)
+      expect(data.error).toBe('Invalid payload')
+    })
+
+    it('should accept name with exactly 100 characters', async () => {
+      const mockUser = {
+        id: mockUserId,
+        email: 'test@example.com',
+        name: 'a'.repeat(100),
+        preferences: null,
+      }
+
+      mockPrisma.user.findUnique.mockResolvedValue(mockUser)
+      mockPrisma.user.update.mockResolvedValue(mockUser)
+
+      const request = new Request('http://localhost/api/settings', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          name: 'a'.repeat(100),
+        }),
+      })
+
+      const response = await PATCH(request)
+
+      expect(response.status).toBe(200)
+    })
+
+    it('should validate preferences structure correctly', async () => {
+      const request = new Request('http://localhost/api/settings', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          preferences: {
+            enabledActionTypes: [ActionType.BLOOD_GLUCOSE],
+            enabledAnalytics: {
+              bloodGlucoseTrend: true,
+              dailyGlucoseSummary: true,
+              insulinVsGlucose: false,
+              exerciseHydration: false,
+              sleepGlucose: false,
+              weightTrend: false,
+              bloodPressureTrend: false,
+              dailyBloodPressureSummary: false,
+              bpVsGlucose: false,
+              correlationAnalysis: false,
+            },
+          },
+        }),
+      })
+
+      const mockUser = {
+        id: mockUserId,
+        email: 'test@example.com',
+        name: 'Test User',
+        preferences: null,
+      }
+
+      mockPrisma.user.findUnique.mockResolvedValue(mockUser)
+      mockPrisma.user.update.mockResolvedValue({
+        ...mockUser,
+        preferences: {
+          enabledActionTypes: [ActionType.BLOOD_GLUCOSE],
+          enabledAnalytics: {
+            bloodGlucoseTrend: true,
+            dailyGlucoseSummary: true,
+            insulinVsGlucose: false,
+            exerciseHydration: false,
+            sleepGlucose: false,
+            weightTrend: false,
+            bloodPressureTrend: false,
+            dailyBloodPressureSummary: false,
+            bpVsGlucose: false,
+            correlationAnalysis: false,
+          },
+        },
+      })
+
+      const response = await PATCH(request)
+
+      expect(response.status).toBe(200)
+    })
+
+    it('should handle partial preferences update', async () => {
+      const existingPreferences = {
+        enabledActionTypes: [ActionType.BLOOD_GLUCOSE, ActionType.INSULIN],
+        enabledAnalytics: {
+          bloodGlucoseTrend: true,
+          dailyGlucoseSummary: false,
+          insulinVsGlucose: true,
+          exerciseHydration: false,
+          sleepGlucose: false,
+          weightTrend: false,
+          bloodPressureTrend: false,
+          dailyBloodPressureSummary: false,
+          bpVsGlucose: false,
+          correlationAnalysis: false,
+        },
+      }
+
+      const mockUser = {
+        id: mockUserId,
+        email: 'test@example.com',
+        name: 'Test User',
+        preferences: existingPreferences,
+      }
+
+      const updatedPreferences = {
+        ...existingPreferences,
+        enabledAnalytics: {
+          ...existingPreferences.enabledAnalytics,
+          dailyGlucoseSummary: true,
+        },
+      }
+
+      mockPrisma.user.findUnique.mockResolvedValue(mockUser)
+      mockPrisma.user.update.mockResolvedValue({
+        ...mockUser,
+        preferences: updatedPreferences,
+      })
+
+      const request = new Request('http://localhost/api/settings', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          preferences: updatedPreferences,
+        }),
+      })
+
+      const response = await PATCH(request)
+      const data = await response.json()
+
+      expect(response.status).toBe(200)
+      expect(data.preferences.enabledAnalytics.dailyGlucoseSummary).toBe(true)
+      expect(data.preferences.enabledActionTypes).toEqual([
+        ActionType.BLOOD_GLUCOSE,
+        ActionType.INSULIN,
+      ])
+    })
+
+    it('should return error when preferences has invalid action types', async () => {
+      const request = new Request('http://localhost/api/settings', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          preferences: {
+            enabledActionTypes: ['INVALID_TYPE', 'ANOTHER_INVALID'],
+            enabledAnalytics: DEFAULT_PREFERENCES.enabledAnalytics,
+          },
+        }),
+      })
+
+      const response = await PATCH(request)
+      const data = await response.json()
+
+      expect(response.status).toBe(400)
+      expect(data.error).toBeDefined()
     })
   })
 })

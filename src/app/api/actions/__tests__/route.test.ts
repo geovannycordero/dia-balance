@@ -1,4 +1,3 @@
-import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
 
 import { ActionType } from '@/app/constants/action-types'
@@ -33,6 +32,7 @@ jest.mock('@/lib/prisma', () => ({
 }))
 
 const mockGetServerSession = getServerSession as jest.MockedFunction<typeof getServerSession>
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockPrisma = prisma as any
 
 describe('/api/actions', () => {
@@ -46,6 +46,7 @@ describe('/api/actions', () => {
 
   beforeEach(() => {
     jest.clearAllMocks()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mockGetServerSession.mockResolvedValue(mockSession as any)
   })
 
@@ -61,6 +62,7 @@ describe('/api/actions', () => {
     })
 
     it('should return 401 if user email is missing', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       mockGetServerSession.mockResolvedValue({ user: {} } as any)
 
       const response = await GET()
@@ -73,6 +75,7 @@ describe('/api/actions', () => {
     it('should return 401 if user id is missing', async () => {
       mockGetServerSession.mockResolvedValue({
         user: { email: 'test@example.com' },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any)
 
       const response = await GET()
@@ -111,6 +114,100 @@ describe('/api/actions', () => {
       expect(data[0].timestamp).toBe(mockActions[0].timestamp.toISOString())
       expect(data[1].id).toBe('action-2')
       expect(data[1].timestamp).toBe(mockActions[1].timestamp.toISOString())
+      expect(mockPrisma.action.findMany).toHaveBeenCalledWith({
+        where: { userId: mockUserId },
+        orderBy: { timestamp: 'desc' },
+        take: 200,
+      })
+    })
+
+    it('should return empty array when no actions exist', async () => {
+      mockPrisma.action.findMany.mockResolvedValue([])
+
+      const response = await GET()
+      const data = await response.json()
+
+      expect(response.status).toBe(200)
+      expect(data).toHaveLength(0)
+      expect(Array.isArray(data)).toBe(true)
+    })
+
+    it('should respect limit of 200 actions', async () => {
+      const mockActions = Array.from({ length: 200 }, (_, i) => ({
+        id: `action-${i}`,
+        userId: mockUserId,
+        type: ActionType.BLOOD_GLUCOSE,
+        timestamp: new Date(`2024-01-${String(i + 1).padStart(2, '0')}`),
+        bloodGlucose: 120,
+      }))
+
+      mockPrisma.action.findMany.mockResolvedValue(mockActions)
+
+      const response = await GET()
+      const data = await response.json()
+
+      expect(response.status).toBe(200)
+      expect(data).toHaveLength(200)
+      expect(mockPrisma.action.findMany).toHaveBeenCalledWith({
+        where: { userId: mockUserId },
+        orderBy: { timestamp: 'desc' },
+        take: 200,
+      })
+    })
+
+    it('should order actions by timestamp descending', async () => {
+      const mockActions = [
+        {
+          id: 'action-1',
+          userId: mockUserId,
+          type: ActionType.BLOOD_GLUCOSE,
+          timestamp: new Date('2024-01-03'),
+          bloodGlucose: 120,
+        },
+        {
+          id: 'action-2',
+          userId: mockUserId,
+          type: ActionType.BLOOD_GLUCOSE,
+          timestamp: new Date('2024-01-01'),
+          bloodGlucose: 110,
+        },
+        {
+          id: 'action-3',
+          userId: mockUserId,
+          type: ActionType.BLOOD_GLUCOSE,
+          timestamp: new Date('2024-01-02'),
+          bloodGlucose: 115,
+        },
+      ]
+
+      mockPrisma.action.findMany.mockResolvedValue(mockActions)
+
+      const response = await GET()
+      // const data = await response.json()
+
+      expect(response.status).toBe(200)
+      expect(mockPrisma.action.findMany).toHaveBeenCalledWith({
+        where: { userId: mockUserId },
+        orderBy: { timestamp: 'desc' },
+        take: 200,
+      })
+    })
+
+    it('should filter actions by authenticated user only', async () => {
+      const mockActions = [
+        {
+          id: 'action-1',
+          userId: mockUserId,
+          type: ActionType.BLOOD_GLUCOSE,
+          timestamp: new Date('2024-01-01'),
+          bloodGlucose: 120,
+        },
+      ]
+
+      mockPrisma.action.findMany.mockResolvedValue(mockActions)
+
+      await GET()
+
       expect(mockPrisma.action.findMany).toHaveBeenCalledWith({
         where: { userId: mockUserId },
         orderBy: { timestamp: 'desc' },
@@ -382,6 +479,241 @@ describe('/api/actions', () => {
       expect(timestamp).toBeInstanceOf(Date)
       expect(timestamp.getTime()).toBeGreaterThanOrEqual(beforeTime.getTime())
       expect(timestamp.getTime()).toBeLessThanOrEqual(afterTime.getTime())
+    })
+
+    it('should create medication action', async () => {
+      const payload = {
+        type: ActionType.MEDICATION,
+        medicationName: 'Metformin',
+        medicationDose: '500mg',
+        notes: 'Morning dose',
+      }
+
+      const createdAction = {
+        id: 'action-med',
+        userId: mockUserId,
+        ...payload,
+        timestamp: new Date(),
+      }
+
+      mockPrisma.action.create.mockResolvedValue(createdAction)
+
+      const request = new Request('http://localhost/api/actions', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      })
+
+      const response = await POST(request)
+      const data = await response.json()
+
+      expect(response.status).toBe(201)
+      expect(data.id).toBe(createdAction.id)
+      expect(data.type).toBe(createdAction.type)
+      expect(data.medicationName).toBe(createdAction.medicationName)
+      expect(data.medicationDose).toBe(createdAction.medicationDose)
+    })
+
+    it('should create food action', async () => {
+      const payload = {
+        type: ActionType.FOOD,
+        foodDescription: 'Grilled chicken with vegetables',
+        notes: 'Lunch',
+      }
+
+      const createdAction = {
+        id: 'action-food',
+        userId: mockUserId,
+        ...payload,
+        timestamp: new Date(),
+      }
+
+      mockPrisma.action.create.mockResolvedValue(createdAction)
+
+      const request = new Request('http://localhost/api/actions', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      })
+
+      const response = await POST(request)
+      const data = await response.json()
+
+      expect(response.status).toBe(201)
+      expect(data.id).toBe(createdAction.id)
+      expect(data.type).toBe(createdAction.type)
+      expect(data.foodDescription).toBe(createdAction.foodDescription)
+    })
+
+    it('should create symptoms action', async () => {
+      const payload = {
+        type: ActionType.SYMPTOMS,
+        symptomDesc: 'Headache',
+        symptomSeverity: 7,
+        notes: 'Persistent headache',
+      }
+
+      const createdAction = {
+        id: 'action-symptoms',
+        userId: mockUserId,
+        ...payload,
+        timestamp: new Date(),
+      }
+
+      mockPrisma.action.create.mockResolvedValue(createdAction)
+
+      const request = new Request('http://localhost/api/actions', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      })
+
+      const response = await POST(request)
+      const data = await response.json()
+
+      expect(response.status).toBe(201)
+      expect(data.id).toBe(createdAction.id)
+      expect(data.type).toBe(createdAction.type)
+      expect(data.symptomDesc).toBe(createdAction.symptomDesc)
+      expect(data.symptomSeverity).toBe(createdAction.symptomSeverity)
+    })
+
+    it('should create weight action', async () => {
+      const payload = {
+        type: ActionType.WEIGHT,
+        weightValue: 75.5,
+        weightUnit: 'kg',
+        notes: 'Morning weight',
+      }
+
+      const createdAction = {
+        id: 'action-weight',
+        userId: mockUserId,
+        ...payload,
+        timestamp: new Date(),
+      }
+
+      mockPrisma.action.create.mockResolvedValue(createdAction)
+
+      const request = new Request('http://localhost/api/actions', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      })
+
+      const response = await POST(request)
+      const data = await response.json()
+
+      expect(response.status).toBe(201)
+      expect(data.id).toBe(createdAction.id)
+      expect(data.type).toBe(createdAction.type)
+      expect(data.weightValue).toBe(createdAction.weightValue)
+      expect(data.weightUnit).toBe(createdAction.weightUnit)
+    })
+
+    it('should create hydration action', async () => {
+      const payload = {
+        type: ActionType.HYDRATION,
+        hydrationAmount: 500,
+        notes: 'Water intake',
+      }
+
+      const createdAction = {
+        id: 'action-hydration',
+        userId: mockUserId,
+        ...payload,
+        timestamp: new Date(),
+      }
+
+      mockPrisma.action.create.mockResolvedValue(createdAction)
+
+      const request = new Request('http://localhost/api/actions', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      })
+
+      const response = await POST(request)
+      const data = await response.json()
+
+      expect(response.status).toBe(201)
+      expect(data.id).toBe(createdAction.id)
+      expect(data.type).toBe(createdAction.type)
+      expect(data.hydrationAmount).toBe(createdAction.hydrationAmount)
+    })
+
+    it('should handle optional fields correctly', async () => {
+      const payload = {
+        type: ActionType.BLOOD_GLUCOSE,
+        bloodGlucose: 120,
+        notes: 'Optional notes',
+        timestamp: '2024-01-01T10:00:00Z',
+      }
+
+      const createdAction = {
+        id: 'action-optional',
+        userId: mockUserId,
+        ...payload,
+        timestamp: new Date(payload.timestamp),
+      }
+
+      mockPrisma.action.create.mockResolvedValue(createdAction)
+
+      const request = new Request('http://localhost/api/actions', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      })
+
+      const response = await POST(request)
+      const data = await response.json()
+
+      expect(response.status).toBe(201)
+      expect(data.notes).toBe(payload.notes)
+      expect(data.timestamp).toBe(new Date(payload.timestamp).toISOString())
+    })
+
+    it('should reject invalid blood glucose value', async () => {
+      const request = new Request('http://localhost/api/actions', {
+        method: 'POST',
+        body: JSON.stringify({
+          type: ActionType.BLOOD_GLUCOSE,
+          bloodGlucose: -10,
+        }),
+      })
+
+      const response = await POST(request)
+      const data = await response.json()
+
+      expect(response.status).toBe(400)
+      expect(data.error).toBe('Invalid payload')
+    })
+
+    it('should reject empty string for required fields', async () => {
+      const request = new Request('http://localhost/api/actions', {
+        method: 'POST',
+        body: JSON.stringify({
+          type: ActionType.MEDICATION,
+          medicationName: '',
+          medicationDose: '500mg',
+        }),
+      })
+
+      const response = await POST(request)
+      const data = await response.json()
+
+      expect(response.status).toBe(400)
+      expect(data.error).toBe('Invalid payload')
+    })
+
+    it('should reject missing required fields for action type', async () => {
+      const request = new Request('http://localhost/api/actions', {
+        method: 'POST',
+        body: JSON.stringify({
+          type: ActionType.INSULIN,
+          // Missing insulinType and insulinUnits
+        }),
+      })
+
+      const response = await POST(request)
+      const data = await response.json()
+
+      expect(response.status).toBe(400)
+      expect(data.error).toBe('Invalid payload')
     })
   })
 })
