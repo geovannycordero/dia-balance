@@ -1,39 +1,13 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
+import { formatDateDDMMYYYY, formatDateTimeDDMMYYYY } from './date-utils';
+
 type JsPDFWithAutoTable = jsPDF & {
   lastAutoTable: {
     finalY: number;
   };
 };
-
-/**
- * Format a date to dd/mm/YYYY format
- * @param date - Date object or ISO string
- * @returns Formatted date string in dd/mm/YYYY format
- */
-function formatDateDDMMYYYY(date: Date | string): string {
-  const dateObj = typeof date === 'string' ? new Date(date) : date;
-  const day = String(dateObj.getDate()).padStart(2, '0');
-  const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-  const year = dateObj.getFullYear();
-  return `${day}/${month}/${year}`;
-}
-
-/**
- * Format a date with time to dd/mm/YYYY HH:mm format
- * @param date - Date object or ISO string
- * @returns Formatted date string in dd/mm/YYYY HH:mm format
- */
-function formatDateTimeDDMMYYYY(date: Date | string): string {
-  const dateObj = typeof date === 'string' ? new Date(date) : date;
-  const day = String(dateObj.getDate()).padStart(2, '0');
-  const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-  const year = dateObj.getFullYear();
-  const hours = String(dateObj.getHours()).padStart(2, '0');
-  const minutes = String(dateObj.getMinutes()).padStart(2, '0');
-  return `${day}/${month}/${year} ${hours}:${minutes}`;
-}
 
 type AnalyticsData = {
   range: {
@@ -170,7 +144,7 @@ export function exportToPDF(data: AnalyticsData): void {
 
     data.bloodGlucose.forEach((r) => {
       const dateObj = new Date(r.timestamp);
-      const dayKey = `${dateObj.getFullYear()}-${dateObj.getMonth()}-${dateObj.getDate()}`;
+      const dayKey = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
 
       // If day changed, increment day index
       if (dayKey !== currentDay) {
