@@ -4,6 +4,64 @@
  */
 
 /**
+ * Format a UTC date to dd/mm/YYYY format (displayed in user's local timezone)
+ * @param date - Date object or ISO string in UTC
+ * @returns Formatted date string in dd/mm/YYYY format
+ */
+export function formatDateDDMMYYYY(date: Date | string): string {
+  const dateObj = typeof date === 'string' ? new Date(date) : date;
+  const day = String(dateObj.getDate()).padStart(2, '0');
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const year = dateObj.getFullYear();
+  return `${day}/${month}/${year}`;
+}
+
+/**
+ * Format a UTC date with time to dd/mm/YYYY HH:mm format (displayed in user's local timezone)
+ * @param date - Date object or ISO string in UTC
+ * @returns Formatted date string in dd/mm/YYYY HH:mm format
+ */
+export function formatDateTimeDDMMYYYY(date: Date | string): string {
+  const dateObj = typeof date === 'string' ? new Date(date) : date;
+  const day = String(dateObj.getDate()).padStart(2, '0');
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const year = dateObj.getFullYear();
+  const hours = String(dateObj.getHours()).padStart(2, '0');
+  const minutes = String(dateObj.getMinutes()).padStart(2, '0');
+  return `${day}/${month}/${year} ${hours}:${minutes}`;
+}
+
+/**
+ * Convert a date string (YYYY-MM-DD) interpreted as local date to UTC ISO string
+ * Used for date filters where user selects a date in their local timezone
+ * @param dateString - String in format "YYYY-MM-DD" (interpreted as local date)
+ * @returns ISO string in UTC format "YYYY-MM-DDTHH:mm:ss.sssZ" (start of day)
+ */
+export function localDateToUTCISO(dateString: string): string {
+  if (!dateString) {
+    return new Date().toISOString();
+  }
+  // Parse as local date (YYYY-MM-DD is interpreted as local midnight)
+  const localDate = new Date(dateString + 'T00:00:00');
+  // Convert to UTC ISO string
+  return localDate.toISOString();
+}
+
+/**
+ * Convert a date string (YYYY-MM-DD) interpreted as local date to UTC ISO string (end of day)
+ * @param dateString - String in format "YYYY-MM-DD" (interpreted as local date)
+ * @returns ISO string in UTC format "YYYY-MM-DDTHH:mm:ss.sssZ" (end of day)
+ */
+export function localDateToUTCISOEndOfDay(dateString: string): string {
+  if (!dateString) {
+    return new Date().toISOString();
+  }
+  // Parse as local date end of day (23:59:59.999)
+  const localDate = new Date(dateString + 'T23:59:59.999');
+  return localDate.toISOString();
+}
+
+/**
  * Convert a datetime-local string (from HTML input) to UTC ISO string
  * datetime-local inputs are in the user's local timezone without timezone info
  * @param localDateTime - String in format "YYYY-MM-DDTHH:mm" (local time)
@@ -18,6 +76,15 @@ export function localToUTC(localDateTime: string): string {
   const localDate = new Date(localDateTime);
   // Convert to UTC ISO string
   return localDate.toISOString();
+}
+
+/**
+ * Alias for localToUTC - converts datetime-local to UTC ISO string
+ * @param localDateTime - String in format "YYYY-MM-DDTHH:mm" (local time)
+ * @returns ISO string in UTC format "YYYY-MM-DDTHH:mm:ss.sssZ"
+ */
+export function localDateTimeToUTCISO(localDateTime: string): string {
+  return localToUTC(localDateTime);
 }
 
 /**
@@ -39,6 +106,7 @@ export function utcToLocal(utcDate: Date | string): string {
 }
 
 /**
+ * @deprecated Use localDateToUTCISO instead. This function returns a Date object, but APIs should receive ISO strings.
  * Convert a date string (YYYY-MM-DD) interpreted as local date to UTC Date
  * Used for date filters where user selects a date in their local timezone
  * @param dateString - String in format "YYYY-MM-DD" (interpreted as local date)
@@ -55,6 +123,7 @@ export function dateStringToUTC(dateString: string): Date {
 }
 
 /**
+ * @deprecated Use localDateToUTCISOEndOfDay instead. This function returns a Date object, but APIs should receive ISO strings.
  * Convert a date string (YYYY-MM-DD) to UTC Date representing end of day
  * @param dateString - String in format "YYYY-MM-DD" (interpreted as local date)
  * @returns Date object representing end of day in UTC

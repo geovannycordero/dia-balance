@@ -20,11 +20,19 @@ export default async function DashboardPage() {
     redirect('/auth/signin');
   }
 
+  // Calculate 24 hours ago in UTC
+  const twentyFourHoursAgo = new Date();
+  twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
+
   const [actions, user] = await Promise.all([
     prisma.action.findMany({
-      where: { userId },
+      where: {
+        userId,
+        timestamp: {
+          gte: twentyFourHoursAgo.toISOString(),
+        },
+      },
       orderBy: { timestamp: 'desc' },
-      take: 50,
     }),
     prisma.user.findUnique({
       where: { id: userId },

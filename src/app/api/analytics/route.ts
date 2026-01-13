@@ -4,7 +4,6 @@ import { getServerSession } from 'next-auth/next';
 
 import { ActionType } from '@/app/constants/action-types';
 import { authOptions } from '@/lib/auth';
-import { dateStringToUTC, dateStringToUTCEndOfDay } from '@/lib/date-utils';
 import { prisma } from '@/lib/prisma';
 
 import type { Action } from '@prisma/client';
@@ -30,18 +29,17 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const params = Object.fromEntries(url.searchParams) as AnalyticsRequestQuery;
 
-  // Date strings (YYYY-MM-DD) represent dates in the user's local timezone
-  // We interpret them as local dates and convert to UTC for database queries
+  // Frontend sends ISO strings in UTC format
+  // Parse them directly as UTC dates
   let rangeStart: Date;
   let rangeEnd: Date;
 
   if (params.from && params.to) {
-    // Custom date range: interpret YYYY-MM-DD strings as local dates
-    // Convert start of from-date and end of to-date to UTC
-    rangeStart = dateStringToUTC(params.from);
-    rangeEnd = dateStringToUTCEndOfDay(params.to);
+    // Frontend sends ISO strings UTC, parse them directly
+    rangeStart = new Date(params.from);
+    rangeEnd = new Date(params.to);
   } else {
-    // Default to last 7 days (in server timezone, which is fine for defaults)
+    // Default to last 7 days (using UTC dates)
     const today = new Date();
     const sevenDaysAgo = subDays(today, 7);
     rangeStart = startOfDay(sevenDaysAgo);

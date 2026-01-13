@@ -18,6 +18,12 @@ import {
 import { ActionType } from '@/app/constants/action-types';
 import { RangePreset } from '@/app/constants/range-presets';
 import { Navigation } from '@/components/Navigation';
+import {
+  formatDateDDMMYYYY,
+  formatDateTimeDDMMYYYY,
+  localDateToUTCISO,
+  localDateToUTCISOEndOfDay,
+} from '@/lib/date-utils';
 import { exportToPDF } from '@/lib/export';
 
 import type { UserPreferences } from '@/lib/user-preferences';
@@ -70,21 +76,24 @@ export function AnalyticsClient({ userPreferences }: AnalyticsClientProps) {
   const [error, setError] = useState<string | null>(null);
 
   // Calculate date range from preset
-  // Date strings (YYYY-MM-DD) are sent as-is to API, which interprets them as local dates
+  // Convert local dates to UTC ISO strings before sending to API
   const dateRange = useMemo(() => {
     if (from && to) {
-      // Custom dates: send as-is (YYYY-MM-DD format)
-      return { from, to };
+      // Custom dates: convert YYYY-MM-DD to UTC ISO strings
+      return {
+        from: localDateToUTCISO(from),
+        to: localDateToUTCISOEndOfDay(to),
+      };
     }
 
-    // For presets, calculate dates in local timezone and format as YYYY-MM-DD
+    // For presets, calculate dates in local timezone, then convert to UTC ISO strings
     const today = new Date();
     const todayStr = formatLocalDate(today);
 
     if (preset === RangePreset.TODAY) {
       return {
-        from: todayStr,
-        to: todayStr,
+        from: localDateToUTCISO(todayStr),
+        to: localDateToUTCISOEndOfDay(todayStr),
       };
     }
 
@@ -92,17 +101,18 @@ export function AnalyticsClient({ userPreferences }: AnalyticsClientProps) {
       const yesterday = subDays(today, 1);
       const yesterdayStr = formatLocalDate(yesterday);
       return {
-        from: yesterdayStr,
-        to: yesterdayStr,
+        from: localDateToUTCISO(yesterdayStr),
+        to: localDateToUTCISOEndOfDay(yesterdayStr),
       };
     }
 
     const daysAgo =
       preset === RangePreset.LAST_7_DAYS ? 7 : preset === RangePreset.LAST_14_DAYS ? 14 : 30;
     const startDate = subDays(today, daysAgo);
+    const startDateStr = formatLocalDate(startDate);
     return {
-      from: formatLocalDate(startDate),
-      to: todayStr,
+      from: localDateToUTCISO(startDateStr),
+      to: localDateToUTCISOEndOfDay(todayStr),
     };
   }, [preset, from, to]);
 
@@ -330,7 +340,10 @@ export function AnalyticsClient({ userPreferences }: AnalyticsClientProps) {
 
   const presetLabel = useMemo(() => {
     if (from && to) {
-      return `${from} to ${to}`;
+      // Format dates as dd/mm/YYYY
+      const fromDate = new Date(from);
+      const toDate = new Date(to);
+      return `${formatDateDDMMYYYY(fromDate)} to ${formatDateDDMMYYYY(toDate)}`;
     }
     switch (preset) {
       case RangePreset.TODAY:
@@ -463,7 +476,7 @@ export function AnalyticsClient({ userPreferences }: AnalyticsClientProps) {
                       <ResponsiveContainer width="100%" height={220}>
                         <LineChart
                           data={data.bloodGlucose.map((p) => ({
-                            time: new Date(p.timestamp).toLocaleString(),
+                            time: formatDateTimeDDMMYYYY(p.timestamp),
                             value: p.value,
                           }))}
                         >
@@ -490,7 +503,7 @@ export function AnalyticsClient({ userPreferences }: AnalyticsClientProps) {
                       <ResponsiveContainer width="100%" height={220}>
                         <LineChart
                           data={data.dailyGlucoseSummary.map((d) => ({
-                            date: new Date(d.date).toLocaleDateString(),
+                            date: formatDateDDMMYYYY(d.date),
                             avg: d.avg,
                             min: d.min,
                             max: d.max,
@@ -602,7 +615,7 @@ export function AnalyticsClient({ userPreferences }: AnalyticsClientProps) {
                       <ResponsiveContainer width="100%" height={220}>
                         <BarChart
                           data={data.hydrationByDay.map((d) => ({
-                            date: new Date(d.date).toLocaleDateString(),
+                            date: formatDateDDMMYYYY(d.date),
                             hydration: d.total,
                           }))}
                         >
@@ -640,7 +653,7 @@ export function AnalyticsClient({ userPreferences }: AnalyticsClientProps) {
                       <ResponsiveContainer width="100%" height={220}>
                         <LineChart
                           data={data.sleep.map((s) => ({
-                            date: new Date(s.timestamp).toLocaleDateString(),
+                            date: formatDateDDMMYYYY(s.timestamp),
                             hours: s.hours,
                             quality: s.quality ?? undefined,
                           }))}
@@ -676,7 +689,7 @@ export function AnalyticsClient({ userPreferences }: AnalyticsClientProps) {
                       <ResponsiveContainer width="100%" height={220}>
                         <LineChart
                           data={data.weightTrend.map((w) => ({
-                            time: new Date(w.timestamp).toLocaleDateString(),
+                            time: formatDateDDMMYYYY(w.timestamp),
                             value: w.value,
                           }))}
                         >
@@ -717,7 +730,7 @@ export function AnalyticsClient({ userPreferences }: AnalyticsClientProps) {
                         <ResponsiveContainer width="100%" height={220}>
                           <LineChart
                             data={data.bloodPressure.map((p) => ({
-                              time: new Date(p.timestamp).toLocaleString(),
+                              time: formatDateTimeDDMMYYYY(p.timestamp),
                               systolic: p.systolic,
                               diastolic: p.diastolic,
                             }))}
@@ -774,7 +787,7 @@ export function AnalyticsClient({ userPreferences }: AnalyticsClientProps) {
                         <ResponsiveContainer width="100%" height={220}>
                           <LineChart
                             data={data.dailyBloodPressureSummary.map((d) => ({
-                              date: new Date(d.date).toLocaleDateString(),
+                              date: formatDateDDMMYYYY(d.date),
                               systolicAvg: d.systolicAvg,
                               systolicMin: d.systolicMin,
                               systolicMax: d.systolicMax,
@@ -994,7 +1007,7 @@ function mergeSeriesForDualAxis(
 
   // First, add all insulin points
   insulin.forEach((p) => {
-    const label = new Date(p.time).toLocaleString();
+    const label = formatDateTimeDDMMYYYY(p.time);
     byTime.set(p.time, {
       time: p.time,
       label,
@@ -1004,7 +1017,7 @@ function mergeSeriesForDualAxis(
 
   // Then, add glucose points (merge with existing or create new)
   glucose.forEach((p) => {
-    const label = new Date(p.time).toLocaleString();
+    const label = formatDateTimeDDMMYYYY(p.time);
     const existing = byTime.get(p.time);
     if (existing) {
       existing.glucose = p.glucose;
@@ -1031,7 +1044,7 @@ function mergeSeriesForDualAxisBP(
 
   // First, add all BP points
   bp.forEach((p) => {
-    const label = new Date(p.time).toLocaleString();
+    const label = formatDateTimeDDMMYYYY(p.time);
     byTime.set(p.time, {
       time: p.time,
       label,
@@ -1042,7 +1055,7 @@ function mergeSeriesForDualAxisBP(
 
   // Then, add glucose points (merge with existing or create new)
   glucose.forEach((p) => {
-    const label = new Date(p.time).toLocaleString();
+    const label = formatDateTimeDDMMYYYY(p.time);
     const existing = byTime.get(p.time);
     if (existing) {
       existing.glucose = p.glucose;
