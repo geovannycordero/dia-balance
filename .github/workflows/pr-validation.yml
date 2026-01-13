@@ -43,6 +43,11 @@ jobs:
       - name: Run type checking
         run: yarn type-check
 
+      - name: Run tests
+        run: yarn test
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/dia-balance_db
+
       - name: Check bundle size
         run: |
           yarn build
@@ -73,7 +78,8 @@ jobs:
               
               **Details**:
               - ✅ Linting: Passed
-              - ✅ Type checking: Passed  
+              - ✅ Type checking: Passed
+              - ✅ Tests: All passing
               - ✅ Build: Successful
               
               **Next Steps**:
