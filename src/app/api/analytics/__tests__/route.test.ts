@@ -313,7 +313,7 @@ describe('/api/analytics', () => {
         timestamp: mockActions[0].timestamp.toISOString(),
         systolic: 120,
         diastolic: 80,
-        category: 'hypertension-stage-1', // 120/80 falls into stage-1 because diastolic >= 80
+        category: 'hypertension-stage-1', // per app logic: diastolic >= 80 is classified as stage-1 (120/80 is a clinical boundary case)
       })
     })
 
