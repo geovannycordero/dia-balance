@@ -15,6 +15,8 @@ import {
   CartesianGrid,
 } from 'recharts';
 
+import type { UserPreferences } from '@/lib/user-preferences';
+
 import { ActionType } from '@/app/constants/action-types';
 import { RangePreset } from '@/app/constants/range-presets';
 import { Navigation } from '@/components/Navigation';
@@ -25,8 +27,6 @@ import {
   localDateToUTCISOEndOfDay,
 } from '@/lib/date-utils';
 import { exportToPDF } from '@/lib/export';
-
-import type { UserPreferences } from '@/lib/user-preferences';
 
 type AnalyticsResponse = {
   range: {

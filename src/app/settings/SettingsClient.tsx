@@ -3,11 +3,11 @@
 import { Settings } from 'lucide-react';
 import { useState } from 'react';
 
+import type { UserPreferences } from '@/lib/user-preferences';
+
 import { ActionType, ACTION_TYPES } from '@/app/constants/action-types';
 import { Navigation } from '@/components/Navigation';
 import { useToast } from '@/components/ToastProvider';
-
-import type { UserPreferences } from '@/lib/user-preferences';
 
 type SettingsClientProps = {
   initialName: string;

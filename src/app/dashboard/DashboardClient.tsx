@@ -2,6 +2,9 @@
 
 import { useEffect, useMemo, useState } from 'react';
 
+import type { UserPreferences } from '@/lib/user-preferences';
+import type { Action } from '@prisma/client';
+
 import { ActionType } from '@/app/constants/action-types';
 import { Navigation } from '@/components/Navigation';
 import { useToast } from '@/components/ToastProvider';
@@ -17,9 +20,6 @@ import {
   utcToLocal,
 } from '@/lib/date-utils';
 import { useOnlineStatus } from '@/lib/use-online-status';
-
-import type { UserPreferences } from '@/lib/user-preferences';
-import type { Action } from '@prisma/client';
 
 type DashboardClientProps = {
   initialActions: Action[];

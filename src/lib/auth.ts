@@ -3,9 +3,9 @@ import CredentialsProvider from 'next-auth/providers/credentials';
 import EmailProvider, { type EmailConfig } from 'next-auth/providers/email';
 import { Resend } from 'resend';
 
-import { prisma } from '@/lib/prisma';
-
 import type { NextAuthOptions } from 'next-auth';
+
+import { prisma } from '@/lib/prisma';
 
 // Simple dev email provider: log codes to console instead of sending
 function createDevEmailProvider(config: EmailConfig) {

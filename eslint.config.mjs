@@ -1,9 +1,8 @@
-import tsEslintPlugin from '@typescript-eslint/eslint-plugin';
 import { defineConfig, globalIgnores } from 'eslint/config';
 import nextVitals from 'eslint-config-next/core-web-vitals';
 import nextTs from 'eslint-config-next/typescript';
 import eslintConfigPrettier from 'eslint-config-prettier';
-import eslintPluginImport from 'eslint-plugin-import';
+import eslintPluginImportX from 'eslint-plugin-import-x';
 
 const eslintConfig = defineConfig([
   ...nextVitals,
@@ -19,11 +18,10 @@ const eslintConfig = defineConfig([
   // Additional project-wide rules.
   {
     plugins: {
-      import: eslintPluginImport,
-      '@typescript-eslint': tsEslintPlugin,
+      'import-x': eslintPluginImportX,
     },
     rules: {
-      // TypeScript best practices
+      // TypeScript best practices — plugin registered by eslint-config-next
       '@typescript-eslint/no-unused-vars': [
         'warn',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
@@ -33,7 +31,7 @@ const eslintConfig = defineConfig([
 
       // Import hygiene
       'no-duplicate-imports': 'error',
-      'import/order': [
+      'import-x/order': [
         'warn',
         {
           groups: [
