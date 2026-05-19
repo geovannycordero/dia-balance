@@ -2,11 +2,11 @@ import { endOfDay, startOfDay, subDays } from 'date-fns';
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 
+import type { Action } from '@prisma/client';
+
 import { ActionType } from '@/app/constants/action-types';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-
-import type { Action } from '@prisma/client';
 
 type AnalyticsRequestQuery = {
   from?: string;

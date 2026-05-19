@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@prisma/client'
+import type { PrismaClient } from '@prisma/client';
 
 // Mock Prisma Client - functions will be set up in test files
 const mockPrisma = {
@@ -19,7 +19,6 @@ const mockPrisma = {
     findFirst: () => Promise.resolve(null),
     delete: () => Promise.resolve({}),
   },
-}
+};
 
-export const prisma = mockPrisma as unknown as PrismaClient
-
+export const prisma = mockPrisma as unknown as PrismaClient;

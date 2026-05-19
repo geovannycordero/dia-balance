@@ -1,2 +1,1 @@
-export const getServerSession = () => Promise.resolve(null)
-
+export const getServerSession = () => Promise.resolve(null);
