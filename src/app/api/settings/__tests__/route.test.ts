@@ -122,7 +122,10 @@ describe('/api/settings', () => {
       const customPreferences = {
         enabledActionTypes: [ActionType.BLOOD_GLUCOSE, ActionType.INSULIN],
         enabledAnalytics: {
+          glucoseOverview: true,
           bloodGlucoseTrend: true,
+          agpChart: true,
+          glucosePatterns: true,
           dailyGlucoseSummary: false,
           insulinVsGlucose: true,
           exerciseHydration: false,
@@ -283,7 +286,10 @@ describe('/api/settings', () => {
       const newPreferences = {
         enabledActionTypes: [ActionType.BLOOD_GLUCOSE, ActionType.INSULIN],
         enabledAnalytics: {
+          glucoseOverview: true,
           bloodGlucoseTrend: true,
+          agpChart: true,
+          glucosePatterns: true,
           dailyGlucoseSummary: true,
           insulinVsGlucose: true,
           exerciseHydration: false,
@@ -470,25 +476,28 @@ describe('/api/settings', () => {
     });
 
     it('should validate preferences structure correctly', async () => {
+      const validPreferences = {
+        enabledActionTypes: [ActionType.BLOOD_GLUCOSE],
+        enabledAnalytics: {
+          glucoseOverview: true,
+          bloodGlucoseTrend: true,
+          agpChart: true,
+          glucosePatterns: true,
+          dailyGlucoseSummary: true,
+          insulinVsGlucose: false,
+          exerciseHydration: false,
+          sleepGlucose: false,
+          weightTrend: false,
+          bloodPressureTrend: false,
+          dailyBloodPressureSummary: false,
+          bpVsGlucose: false,
+          correlationAnalysis: false,
+        },
+      };
+
       const request = new Request('http://localhost/api/settings', {
         method: 'PATCH',
-        body: JSON.stringify({
-          preferences: {
-            enabledActionTypes: [ActionType.BLOOD_GLUCOSE],
-            enabledAnalytics: {
-              bloodGlucoseTrend: true,
-              dailyGlucoseSummary: true,
-              insulinVsGlucose: false,
-              exerciseHydration: false,
-              sleepGlucose: false,
-              weightTrend: false,
-              bloodPressureTrend: false,
-              dailyBloodPressureSummary: false,
-              bpVsGlucose: false,
-              correlationAnalysis: false,
-            },
-          },
-        }),
+        body: JSON.stringify({ preferences: validPreferences }),
       });
 
       const mockUser = {
@@ -499,24 +508,7 @@ describe('/api/settings', () => {
       };
 
       mockPrisma.user.findUnique.mockResolvedValue(mockUser);
-      mockPrisma.user.update.mockResolvedValue({
-        ...mockUser,
-        preferences: {
-          enabledActionTypes: [ActionType.BLOOD_GLUCOSE],
-          enabledAnalytics: {
-            bloodGlucoseTrend: true,
-            dailyGlucoseSummary: true,
-            insulinVsGlucose: false,
-            exerciseHydration: false,
-            sleepGlucose: false,
-            weightTrend: false,
-            bloodPressureTrend: false,
-            dailyBloodPressureSummary: false,
-            bpVsGlucose: false,
-            correlationAnalysis: false,
-          },
-        },
-      });
+      mockPrisma.user.update.mockResolvedValue({ ...mockUser, preferences: validPreferences });
 
       const response = await PATCH(request);
 
@@ -527,7 +519,10 @@ describe('/api/settings', () => {
       const existingPreferences = {
         enabledActionTypes: [ActionType.BLOOD_GLUCOSE, ActionType.INSULIN],
         enabledAnalytics: {
+          glucoseOverview: true,
           bloodGlucoseTrend: true,
+          agpChart: true,
+          glucosePatterns: true,
           dailyGlucoseSummary: false,
           insulinVsGlucose: true,
           exerciseHydration: false,

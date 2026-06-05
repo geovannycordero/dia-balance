@@ -24,9 +24,16 @@ function createDevEmailProvider(config: EmailConfig) {
       });
 
       // Dev-friendly: log code instead of sending real email
+      const bar = '\x1b[36m' + '─'.repeat(48) + '\x1b[0m';
       // eslint-disable-next-line no-console
       console.log(
-        `\x1b[33m[DEV EMAIL]\x1b[0m Verification code for ${normalizedEmail}: ${code}\x1b[0m`,
+        `\n${bar}\n` +
+          `\x1b[1m  🔐  DEV — SIGN-IN CODE\x1b[0m\n` +
+          `${bar}\n` +
+          `  \x1b[2mEmail :\x1b[0m  \x1b[33m${normalizedEmail}\x1b[0m\n` +
+          `  \x1b[2mCode  :\x1b[0m  \x1b[1m\x1b[32m${code}\x1b[0m\n` +
+          `  \x1b[2mExpires in 10 minutes\x1b[0m\n` +
+          `${bar}\n`,
       );
     },
   });
@@ -42,7 +49,7 @@ export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
   secret: process.env.NEXTAUTH_SECRET,
   providers: [
-    process.env.NODE_ENV === 'development'
+    process.env.NODE_ENV !== 'production'
       ? createDevEmailProvider({
           server: '',
           from: process.env.EMAIL_FROM || 'noreply@example.com',
