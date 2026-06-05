@@ -3,10 +3,10 @@ import { z } from 'zod';
 import { ActionType } from '@/app/constants/action-types';
 
 export const EnabledAnalyticsSchema = z.object({
-  glucoseOverview: z.boolean(),
+  glucoseOverview: z.boolean().default(true),
   bloodGlucoseTrend: z.boolean(),
-  agpChart: z.boolean(),
-  glucosePatterns: z.boolean(),
+  agpChart: z.boolean().default(true),
+  glucosePatterns: z.boolean().default(true),
   dailyGlucoseSummary: z.boolean(),
   insulinVsGlucose: z.boolean(),
   exerciseHydration: z.boolean(),

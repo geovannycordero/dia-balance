@@ -405,17 +405,25 @@ function computeTimeInRanges(readings: { value: number }[]): {
     else counts.veryHigh++;
   }
 
-  const toStat = (count: number): ZoneStat => ({
-    pct: Math.round((count / total) * 100),
-    timeMinutes: Math.round((count / total) * minutesPerDay),
+  const roundPct = (count: number) => Math.round((count / total) * 100);
+  const veryLowPct = roundPct(counts.veryLow);
+  const lowPct = roundPct(counts.low);
+  const highPct = roundPct(counts.high);
+  const veryHighPct = roundPct(counts.veryHigh);
+  // Derive target as remainder so all five zones always sum to exactly 100%
+  const targetPct = 100 - veryLowPct - lowPct - highPct - veryHighPct;
+
+  const toPctStat = (pct: number): ZoneStat => ({
+    pct,
+    timeMinutes: Math.round((pct / 100) * minutesPerDay),
   });
 
   return {
-    veryLow: toStat(counts.veryLow),
-    low: toStat(counts.low),
-    target: toStat(counts.target),
-    high: toStat(counts.high),
-    veryHigh: toStat(counts.veryHigh),
+    veryLow: toPctStat(veryLowPct),
+    low: toPctStat(lowPct),
+    target: toPctStat(targetPct),
+    high: toPctStat(highPct),
+    veryHigh: toPctStat(veryHighPct),
   };
 }
 

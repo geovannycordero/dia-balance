@@ -379,7 +379,7 @@ export function AnalyticsClient({ userPreferences }: AnalyticsClientProps) {
                 )}
 
               {/* ── Ambulatory Glucose Profile (AGP) ── */}
-              {userPreferences.enabledAnalytics.bloodGlucoseTrend &&
+              {userPreferences.enabledAnalytics.agpChart &&
                 data.agp &&
                 data.agp.slots.some((s) => s.p50 > 0) && (
                   <AnalyticsCard title="Ambulatory Glucose Profile (AGP)">
@@ -910,43 +910,25 @@ function AGPChart({ agp }: AGPChartProps) {
           <ReferenceLine y={180} stroke="#16a34a" strokeWidth={1.5} strokeDasharray="0" label={{ value: '180', position: 'right', fontSize: 9, fill: '#16a34a' }} />
           <ReferenceLine y={70} stroke="#16a34a" strokeWidth={1.5} strokeDasharray="0" label={{ value: '70', position: 'right', fontSize: 9, fill: '#16a34a' }} />
 
-          {/* 5th–95th percentile outer band */}
+          {/* 5th–95th percentile outer band (range area — no white-fill masking) */}
           <Area
             type="monotone"
-            dataKey="p95"
+            dataKey="outerBand"
             stroke="none"
             fill="#93c5fd"
             fillOpacity={0.2}
-            name="95th %ile"
-            legendType="none"
-          />
-          <Area
-            type="monotone"
-            dataKey="p5"
-            stroke="none"
-            fill="#ffffff"
-            fillOpacity={1}
-            name="5th %ile"
+            name="5th–95th %ile"
             legendType="none"
           />
 
           {/* 25th–75th percentile inner band */}
           <Area
             type="monotone"
-            dataKey="p75"
+            dataKey="innerBand"
             stroke="none"
             fill="#3b82f6"
             fillOpacity={0.35}
-            name="75th %ile"
-            legendType="none"
-          />
-          <Area
-            type="monotone"
-            dataKey="p25"
-            stroke="none"
-            fill="#ffffff"
-            fillOpacity={1}
-            name="25th %ile"
+            name="25th–75th %ile"
             legendType="none"
           />
 
