@@ -10,7 +10,7 @@ updates:
       interval: 'weekly'
       day: 'monday'
       time: '09:00'
-      timezone: 'America/New_York'
+      timezone: 'America/Costa_Rica'
     open-pull-requests-limit: 10
     reviewers:
       - 'gehovah'
@@ -24,6 +24,14 @@ updates:
       - 'dependencies'
       - 'javascript'
     versioning-strategy: 'increase-if-necessary'
+    rebase-strategy: 'auto'
+    groups:
+      minor-and-patch:
+        patterns:
+          - '*'
+        update-types:
+          - 'minor'
+          - 'patch'
     ignore:
       # Ignore major version updates for critical dependencies
       - dependency-name: 'next'
@@ -46,7 +54,7 @@ updates:
       interval: 'weekly'
       day: 'monday'
       time: '09:00'
-      timezone: 'America/New_York'
+      timezone: 'America/Costa_Rica'
     open-pull-requests-limit: 5
     reviewers:
       - 'gehovah'
@@ -67,16 +75,23 @@ updates:
       interval: 'weekly'
       day: 'monday'
       time: '09:00'
-      timezone: 'America/New_York'
+      timezone: 'America/Costa_Rica'
     open-pull-requests-limit: 5
     reviewers:
       - 'gehovah'
     assignees:
       - 'gehovah'
     commit-message:
-      prefix: 'chore'
-      prefix-development: 'chore'
+      prefix: 'ci'
       include: 'scope'
     labels:
       - 'dependencies'
       - 'github-actions'
+    rebase-strategy: 'auto'
+    groups:
+      actions:
+        patterns:
+          - '*'
+        update-types:
+          - 'minor'
+          - 'patch'
