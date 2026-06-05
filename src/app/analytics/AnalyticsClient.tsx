@@ -1,7 +1,8 @@
 'use client';
 
 import { subDays } from 'date-fns';
-import { useEffect, useMemo, useState } from 'react';
+import html2canvas from 'html2canvas';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Line,
   LineChart,
@@ -13,6 +14,11 @@ import {
   Legend,
   ResponsiveContainer,
   CartesianGrid,
+  ComposedChart,
+  Area,
+  ReferenceLine,
+  Scatter,
+  ZAxis,
 } from 'recharts';
 
 import type { UserPreferences } from '@/lib/user-preferences';
@@ -27,6 +33,18 @@ import {
   localDateToUTCISOEndOfDay,
 } from '@/lib/date-utils';
 import { exportToPDF } from '@/lib/export';
+
+type ZoneStat = { pct: number; timeMinutes: number };
+
+type AGPSlot = {
+  slot: number;
+  label: string;
+  p5: number;
+  p25: number;
+  p50: number;
+  p75: number;
+  p95: number;
+};
 
 type AnalyticsResponse = {
   range: {
@@ -60,12 +78,30 @@ type AnalyticsResponse = {
   hydrationByDay: { date: string; total: number }[];
   weightTrend: { timestamp: string; value: number; unit?: string | null }[];
   bpGlucoseCorrelation: { coefficient: number; strength: string; direction: string } | null;
+  timeInRanges: { veryLow: ZoneStat; low: ZoneStat; target: ZoneStat; high: ZoneStat; veryHigh: ZoneStat } | null;
+  glucoseStats: { averageGlucose: number; gmi: number; glucoseVariability: number; daysOfData: number } | null;
+  agp: { slots: AGPSlot[]; hourlyAverages: { label: string; avg: number }[] } | null;
   insights: string[];
 };
 
 type AnalyticsClientProps = {
   userPreferences: UserPreferences;
 };
+
+function fmtTime(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h === 0) return `${m}min`;
+  return m === 0 ? `${h}h` : `${h}h ${m}min`;
+}
+
+function getZoneColor(value: number): string {
+  if (value > 250) return '#f97316';
+  if (value > 180) return '#eab308';
+  if (value >= 70) return '#22c55e';
+  if (value >= 54) return '#fca5a5';
+  return '#ef4444';
+}
 
 export function AnalyticsClient({ userPreferences }: AnalyticsClientProps) {
   const [preset, setPreset] = useState<RangePreset>(RangePreset.TODAY);
@@ -74,19 +110,16 @@ export function AnalyticsClient({ userPreferences }: AnalyticsClientProps) {
   const [data, setData] = useState<AnalyticsResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const agpRef = useRef<HTMLDivElement>(null);
 
-  // Calculate date range from preset
-  // Convert local dates to UTC ISO strings before sending to API
   const dateRange = useMemo(() => {
     if (from && to) {
-      // Custom dates: convert YYYY-MM-DD to UTC ISO strings
       return {
         from: localDateToUTCISO(from),
         to: localDateToUTCISOEndOfDay(to),
       };
     }
 
-    // For presets, calculate dates in local timezone, then convert to UTC ISO strings
     const today = new Date();
     const todayStr = formatLocalDate(today);
 
@@ -116,7 +149,6 @@ export function AnalyticsClient({ userPreferences }: AnalyticsClientProps) {
     };
   }, [preset, from, to]);
 
-  // Helper to format date as YYYY-MM-DD in local timezone
   function formatLocalDate(date: Date): string {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -147,13 +179,7 @@ export function AnalyticsClient({ userPreferences }: AnalyticsClientProps) {
       }
 
       const json = (await res.json()) as AnalyticsResponse;
-      setData({
-        ...json,
-        range: {
-          from: json.range.from,
-          to: json.range.to,
-        },
-      });
+      setData({ ...json, range: { from: json.range.from, to: json.range.to } });
     } catch (err) {
       console.error(err);
       setError(err instanceof Error ? err.message : 'Failed to load analytics');
@@ -171,158 +197,25 @@ export function AnalyticsClient({ userPreferences }: AnalyticsClientProps) {
     );
 
     data.bloodGlucose.forEach((r) => {
-      rows.push(
-        [
-          ActionType.BLOOD_GLUCOSE,
-          r.timestamp,
-          r.value,
-          '',
-          '',
-          '',
-          '',
-          '',
-          '',
-          '',
-          '',
-          '',
-          '',
-          '',
-          '',
-        ].join(','),
-      );
+      rows.push([ActionType.BLOOD_GLUCOSE, r.timestamp, r.value, '', '', '', '', '', '', '', '', '', '', '', ''].join(','));
     });
-
     data.insulin.forEach((r) => {
-      rows.push(
-        [
-          ActionType.INSULIN,
-          r.timestamp,
-          '',
-          r.units,
-          r.insulinType ?? '',
-          '',
-          '',
-          '',
-          '',
-          '',
-          '',
-          '',
-          '',
-          '',
-          '',
-        ].join(','),
-      );
+      rows.push([ActionType.INSULIN, r.timestamp, '', r.units, r.insulinType ?? '', '', '', '', '', '', '', '', '', '', ''].join(','));
     });
-
     data.exercise.forEach((r) => {
-      rows.push(
-        [
-          ActionType.EXERCISE,
-          r.timestamp,
-          '',
-          '',
-          '',
-          r.type ?? '',
-          r.duration,
-          r.intensity ?? '',
-          '',
-          '',
-          '',
-          '',
-          '',
-          '',
-          '',
-        ].join(','),
-      );
+      rows.push([ActionType.EXERCISE, r.timestamp, '', '', '', r.type ?? '', r.duration, r.intensity ?? '', '', '', '', '', '', '', ''].join(','));
     });
-
     data.sleep.forEach((r) => {
-      rows.push(
-        [
-          ActionType.SLEEP,
-          r.timestamp,
-          '',
-          '',
-          '',
-          '',
-          '',
-          '',
-          r.hours,
-          r.quality ?? '',
-          '',
-          '',
-          '',
-          '',
-          '',
-        ].join(','),
-      );
+      rows.push([ActionType.SLEEP, r.timestamp, '', '', '', '', '', '', r.hours, r.quality ?? '', '', '', '', '', ''].join(','));
     });
-
     data.weightTrend.forEach((r) => {
-      rows.push(
-        [
-          ActionType.WEIGHT,
-          r.timestamp,
-          '',
-          '',
-          '',
-          '',
-          '',
-          '',
-          '',
-          '',
-          r.value,
-          r.unit ?? '',
-          '',
-          '',
-          '',
-        ].join(','),
-      );
+      rows.push([ActionType.WEIGHT, r.timestamp, '', '', '', '', '', '', '', '', r.value, r.unit ?? '', '', '', ''].join(','));
     });
-
     data.hydration.forEach((r) => {
-      rows.push(
-        [
-          ActionType.HYDRATION,
-          r.timestamp,
-          '',
-          '',
-          '',
-          '',
-          '',
-          '',
-          '',
-          '',
-          '',
-          '',
-          r.amount,
-          '',
-          '',
-        ].join(','),
-      );
+      rows.push([ActionType.HYDRATION, r.timestamp, '', '', '', '', '', '', '', '', '', '', r.amount, '', ''].join(','));
     });
-
     data.bloodPressure.forEach((r) => {
-      rows.push(
-        [
-          ActionType.BLOOD_PRESSURE,
-          r.timestamp,
-          '',
-          '',
-          '',
-          '',
-          '',
-          '',
-          '',
-          '',
-          '',
-          '',
-          '',
-          '',
-          r.systolic,
-          r.diastolic,
-        ].join(','),
-      );
+      rows.push([ActionType.BLOOD_PRESSURE, r.timestamp, '', '', '', '', '', '', '', '', '', '', '', r.systolic, r.diastolic].join(','));
     });
 
     return new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
@@ -338,26 +231,33 @@ export function AnalyticsClient({ userPreferences }: AnalyticsClientProps) {
     URL.revokeObjectURL(url);
   };
 
+  const handleExportPDF = async () => {
+    if (!data) return;
+    let agpImage: string | undefined;
+    if (agpRef.current) {
+      try {
+        const canvas = await html2canvas(agpRef.current, { scale: 2, useCORS: true });
+        agpImage = canvas.toDataURL('image/png');
+      } catch {
+        // proceed without chart image
+      }
+    }
+    exportToPDF(data, agpImage);
+  };
+
   const presetLabel = useMemo(() => {
     if (from && to) {
-      // Format dates as dd/mm/YYYY
       const fromDate = new Date(from);
       const toDate = new Date(to);
       return `${formatDateDDMMYYYY(fromDate)} to ${formatDateDDMMYYYY(toDate)}`;
     }
     switch (preset) {
-      case RangePreset.TODAY:
-        return 'Today';
-      case RangePreset.YESTERDAY:
-        return 'Yesterday';
-      case RangePreset.LAST_7_DAYS:
-        return 'Last 7 days';
-      case RangePreset.LAST_14_DAYS:
-        return 'Last 14 days';
-      case RangePreset.LAST_30_DAYS:
-        return 'Last 30 days';
-      default:
-        return '';
+      case RangePreset.TODAY: return 'Today';
+      case RangePreset.YESTERDAY: return 'Yesterday';
+      case RangePreset.LAST_7_DAYS: return 'Last 7 days';
+      case RangePreset.LAST_14_DAYS: return 'Last 14 days';
+      case RangePreset.LAST_30_DAYS: return 'Last 30 days';
+      default: return '';
     }
   }, [preset, from, to]);
 
@@ -386,8 +286,7 @@ export function AnalyticsClient({ userPreferences }: AnalyticsClientProps) {
                   className="rounded-xl border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-900 outline-none ring-sky-500/60 focus:ring-2 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
                   value={preset}
                   onChange={(e) => {
-                    const value = e.target.value as RangePreset;
-                    setPreset(value);
+                    setPreset(e.target.value as RangePreset);
                     setFrom(null);
                     setTo(null);
                   }}
@@ -426,7 +325,7 @@ export function AnalyticsClient({ userPreferences }: AnalyticsClientProps) {
                 </button>
                 <button
                   type="button"
-                  onClick={() => data && exportToPDF(data)}
+                  onClick={handleExportPDF}
                   disabled={!data}
                   className="rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
                 >
@@ -460,89 +359,74 @@ export function AnalyticsClient({ userPreferences }: AnalyticsClientProps) {
 
           {data && (
             <div className="flex flex-col gap-6">
-              {/* Glucose Charts */}
-              {(userPreferences.enabledAnalytics.bloodGlucoseTrend ||
-                userPreferences.enabledAnalytics.dailyGlucoseSummary) && (
-                <section
-                  className={`grid gap-4 ${
-                    userPreferences.enabledAnalytics.bloodGlucoseTrend &&
-                    userPreferences.enabledAnalytics.dailyGlucoseSummary
-                      ? 'md:grid-cols-2'
-                      : 'md:grid-cols-1'
-                  }`}
-                >
-                  {userPreferences.enabledAnalytics.bloodGlucoseTrend && (
-                    <AnalyticsCard title="Blood glucose trend">
-                      <ResponsiveContainer width="100%" height={220}>
-                        <LineChart
-                          data={data.bloodGlucose.map((p) => ({
-                            time: formatDateTimeDDMMYYYY(p.timestamp),
-                            value: p.value,
-                          }))}
-                        >
-                          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                          <XAxis dataKey="time" tick={{ fontSize: 10 }} />
-                          <YAxis tick={{ fontSize: 10 }} />
-                          <Tooltip />
-                          <Legend />
-                          <Line
-                            type="monotone"
-                            dataKey="value"
-                            name="mg/dL"
-                            stroke="#38bdf8"
-                            strokeWidth={2}
-                            dot={false}
-                          />
-                        </LineChart>
-                      </ResponsiveContainer>
-                    </AnalyticsCard>
-                  )}
 
-                  {userPreferences.enabledAnalytics.dailyGlucoseSummary && (
-                    <AnalyticsCard title="Daily glucose summary">
-                      <ResponsiveContainer width="100%" height={220}>
-                        <LineChart
-                          data={data.dailyGlucoseSummary.map((d) => ({
-                            date: formatDateDDMMYYYY(d.date),
-                            avg: d.avg,
-                            min: d.min,
-                            max: d.max,
-                          }))}
-                        >
-                          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                          <XAxis dataKey="date" tick={{ fontSize: 10 }} />
-                          <YAxis tick={{ fontSize: 10 }} />
-                          <Tooltip />
-                          <Legend />
-                          <Line
-                            type="monotone"
-                            dataKey="min"
-                            stroke="#22c55e"
-                            strokeWidth={1.5}
-                            dot={false}
-                          />
-                          <Line
-                            type="monotone"
-                            dataKey="avg"
-                            stroke="#38bdf8"
-                            strokeWidth={2}
-                            dot={false}
-                          />
-                          <Line
-                            type="monotone"
-                            dataKey="max"
-                            stroke="#f97316"
-                            strokeWidth={1.5}
-                            dot={false}
-                          />
-                        </LineChart>
-                      </ResponsiveContainer>
+              {/* ── Glucose Overview: Time in Ranges + Stats ── */}
+              {userPreferences.enabledAnalytics.glucoseOverview &&
+                data.timeInRanges &&
+                data.glucoseStats &&
+                data.bloodGlucose.length > 0 && (
+                  <section className="grid gap-4 md:grid-cols-2">
+                    {/* Time in Ranges card */}
+                    <AnalyticsCard title="Time in Ranges">
+                      <TimeInRangesChart tir={data.timeInRanges} />
                     </AnalyticsCard>
-                  )}
-                </section>
+
+                    {/* Glucose Statistics card */}
+                    <AnalyticsCard title="Glucose Statistics">
+                      <GlucoseStatsPanel stats={data.glucoseStats} />
+                    </AnalyticsCard>
+                  </section>
+                )}
+
+              {/* ── Ambulatory Glucose Profile (AGP) ── */}
+              {userPreferences.enabledAnalytics.agpChart &&
+                data.agp &&
+                data.agp.slots.some((s) => s.p50 > 0) && (
+                  <AnalyticsCard title="Ambulatory Glucose Profile (AGP)">
+                    <p className="mb-2 text-xs italic text-slate-500 dark:text-slate-400">
+                      Summary of glucose values from the report period — median (50%) and
+                      percentiles shown as if occurring in a single day.
+                    </p>
+                    <div ref={agpRef} data-testid="agp-chart">
+                      <AGPChart agp={data.agp} />
+                    </div>
+                  </AnalyticsCard>
+                )}
+
+              {/* ── Glucose Patterns scatter ── */}
+              {userPreferences.enabledAnalytics.glucosePatterns &&
+                data.bloodGlucose.length > 0 && (
+                  <AnalyticsCard title="Glucose Patterns">
+                    <GlucosePatternsChart readings={data.bloodGlucose} />
+                  </AnalyticsCard>
+                )}
+
+              {/* ── Daily Glucose Summary ── */}
+              {userPreferences.enabledAnalytics.dailyGlucoseSummary && (
+                <AnalyticsCard title="Daily glucose summary">
+                  <ResponsiveContainer width="100%" height={220}>
+                    <LineChart
+                      data={data.dailyGlucoseSummary.map((d) => ({
+                        date: formatDateDDMMYYYY(d.date),
+                        avg: d.avg,
+                        min: d.min,
+                        max: d.max,
+                      }))}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                      <XAxis dataKey="date" tick={{ fontSize: 10 }} />
+                      <YAxis tick={{ fontSize: 10 }} />
+                      <Tooltip />
+                      <Legend />
+                      <Line type="monotone" dataKey="min" stroke="#22c55e" strokeWidth={1.5} dot={false} />
+                      <Line type="monotone" dataKey="avg" stroke="#38bdf8" strokeWidth={2} dot={false} />
+                      <Line type="monotone" dataKey="max" stroke="#f97316" strokeWidth={1.5} dot={false} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </AnalyticsCard>
               )}
 
-              {/* Insulin & Hydration Charts */}
+              {/* ── Insulin & Hydration ── */}
               {(userPreferences.enabledAnalytics.insulinVsGlucose ||
                 userPreferences.enabledAnalytics.exerciseHydration) && (
                 <section
@@ -569,42 +453,13 @@ export function AnalyticsClient({ userPreferences }: AnalyticsClientProps) {
                           )}
                         >
                           <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                          <XAxis
-                            dataKey="label"
-                            tick={{ fontSize: 10 }}
-                            interval="preserveStartEnd"
-                          />
-                          <YAxis
-                            yAxisId="left"
-                            tick={{ fontSize: 10 }}
-                            label={{ value: 'mg/dL', angle: -90, position: 'insideLeft' }}
-                          />
-                          <YAxis
-                            yAxisId="right"
-                            orientation="right"
-                            tick={{ fontSize: 10 }}
-                            label={{ value: 'Units', angle: 90, position: 'insideRight' }}
-                          />
+                          <XAxis dataKey="label" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
+                          <YAxis yAxisId="left" tick={{ fontSize: 10 }} label={{ value: 'mg/dL', angle: -90, position: 'insideLeft' }} />
+                          <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} label={{ value: 'Units', angle: 90, position: 'insideRight' }} />
                           <Tooltip />
                           <Legend />
-                          <Line
-                            yAxisId="left"
-                            type="monotone"
-                            dataKey="glucose"
-                            name="Glucose (mg/dL)"
-                            stroke="#38bdf8"
-                            strokeWidth={2}
-                            dot={false}
-                          />
-                          <Line
-                            yAxisId="right"
-                            type="monotone"
-                            dataKey="insulinUnits"
-                            name="Insulin (units)"
-                            stroke="#a855f7"
-                            strokeWidth={2}
-                            dot={false}
-                          />
+                          <Line yAxisId="left" type="monotone" dataKey="glucose" name="Glucose (mg/dL)" stroke="#38bdf8" strokeWidth={2} dot={false} />
+                          <Line yAxisId="right" type="monotone" dataKey="insulinUnits" name="Insulin (units)" stroke="#a855f7" strokeWidth={2} dot={false} />
                         </LineChart>
                       </ResponsiveContainer>
                     </AnalyticsCard>
@@ -624,12 +479,7 @@ export function AnalyticsClient({ userPreferences }: AnalyticsClientProps) {
                           <YAxis tick={{ fontSize: 10 }} />
                           <Tooltip />
                           <Legend />
-                          <Bar
-                            dataKey="hydration"
-                            name="Hydration (total)"
-                            fill="#22c55e"
-                            radius={[4, 4, 0, 0]}
-                          />
+                          <Bar dataKey="hydration" name="Hydration (total)" fill="#22c55e" radius={[4, 4, 0, 0]} />
                         </BarChart>
                       </ResponsiveContainer>
                     </AnalyticsCard>
@@ -637,7 +487,7 @@ export function AnalyticsClient({ userPreferences }: AnalyticsClientProps) {
                 </section>
               )}
 
-              {/* Sleep & Weight Charts */}
+              {/* ── Sleep & Weight ── */}
               {(userPreferences.enabledAnalytics.sleepGlucose ||
                 userPreferences.enabledAnalytics.weightTrend) && (
                 <section
@@ -663,22 +513,8 @@ export function AnalyticsClient({ userPreferences }: AnalyticsClientProps) {
                           <YAxis tick={{ fontSize: 10 }} />
                           <Tooltip />
                           <Legend />
-                          <Line
-                            type="monotone"
-                            dataKey="hours"
-                            name="Hours slept"
-                            stroke="#38bdf8"
-                            strokeWidth={2}
-                            dot={false}
-                          />
-                          <Line
-                            type="monotone"
-                            dataKey="quality"
-                            name="Quality (1-5)"
-                            stroke="#f97316"
-                            strokeWidth={2}
-                            dot={false}
-                          />
+                          <Line type="monotone" dataKey="hours" name="Hours slept" stroke="#38bdf8" strokeWidth={2} dot={false} />
+                          <Line type="monotone" dataKey="quality" name="Quality (1-5)" stroke="#f97316" strokeWidth={2} dot={false} />
                         </LineChart>
                       </ResponsiveContainer>
                     </AnalyticsCard>
@@ -698,14 +534,7 @@ export function AnalyticsClient({ userPreferences }: AnalyticsClientProps) {
                           <YAxis tick={{ fontSize: 10 }} />
                           <Tooltip />
                           <Legend />
-                          <Line
-                            type="monotone"
-                            dataKey="value"
-                            name="Weight"
-                            stroke="#e5e7eb"
-                            strokeWidth={2}
-                            dot={false}
-                          />
+                          <Line type="monotone" dataKey="value" name="Weight" stroke="#e5e7eb" strokeWidth={2} dot={false} />
                         </LineChart>
                       </ResponsiveContainer>
                     </AnalyticsCard>
@@ -713,7 +542,7 @@ export function AnalyticsClient({ userPreferences }: AnalyticsClientProps) {
                 </section>
               )}
 
-              {/* Blood Pressure Charts */}
+              {/* ── Blood Pressure ── */}
               {data.bloodPressure.length > 0 &&
                 (userPreferences.enabledAnalytics.bloodPressureTrend ||
                   userPreferences.enabledAnalytics.dailyBloodPressureSummary) && (
@@ -740,43 +569,10 @@ export function AnalyticsClient({ userPreferences }: AnalyticsClientProps) {
                             <YAxis tick={{ fontSize: 10 }} />
                             <Tooltip />
                             <Legend />
-                            <Line
-                              type="monotone"
-                              dataKey="systolic"
-                              name="Systolic (mm Hg)"
-                              stroke="#ef4444"
-                              strokeWidth={2}
-                              dot={false}
-                            />
-                            <Line
-                              type="monotone"
-                              dataKey="diastolic"
-                              name="Diastolic (mm Hg)"
-                              stroke="#f97316"
-                              strokeWidth={2}
-                              dot={false}
-                            />
-                            {/* Reference lines for normal BP */}
-                            <Line
-                              type="monotone"
-                              dataKey={() => 120}
-                              name="Normal systolic"
-                              stroke="#22c55e"
-                              strokeWidth={1}
-                              strokeDasharray="5 5"
-                              dot={false}
-                              legendType="none"
-                            />
-                            <Line
-                              type="monotone"
-                              dataKey={() => 80}
-                              name="Normal diastolic"
-                              stroke="#22c55e"
-                              strokeWidth={1}
-                              strokeDasharray="5 5"
-                              dot={false}
-                              legendType="none"
-                            />
+                            <Line type="monotone" dataKey="systolic" name="Systolic (mm Hg)" stroke="#ef4444" strokeWidth={2} dot={false} />
+                            <Line type="monotone" dataKey="diastolic" name="Diastolic (mm Hg)" stroke="#f97316" strokeWidth={2} dot={false} />
+                            <Line type="monotone" dataKey={() => 120} name="Normal systolic" stroke="#22c55e" strokeWidth={1} strokeDasharray="5 5" dot={false} legendType="none" />
+                            <Line type="monotone" dataKey={() => 80} name="Normal diastolic" stroke="#22c55e" strokeWidth={1} strokeDasharray="5 5" dot={false} legendType="none" />
                           </LineChart>
                         </ResponsiveContainer>
                       </AnalyticsCard>
@@ -801,54 +597,12 @@ export function AnalyticsClient({ userPreferences }: AnalyticsClientProps) {
                             <YAxis tick={{ fontSize: 10 }} />
                             <Tooltip />
                             <Legend />
-                            <Line
-                              type="monotone"
-                              dataKey="systolicMin"
-                              stroke="#ef4444"
-                              strokeWidth={1.5}
-                              dot={false}
-                              name="Systolic min"
-                            />
-                            <Line
-                              type="monotone"
-                              dataKey="systolicAvg"
-                              stroke="#ef4444"
-                              strokeWidth={2}
-                              dot={false}
-                              name="Systolic avg"
-                            />
-                            <Line
-                              type="monotone"
-                              dataKey="systolicMax"
-                              stroke="#ef4444"
-                              strokeWidth={1.5}
-                              dot={false}
-                              name="Systolic max"
-                            />
-                            <Line
-                              type="monotone"
-                              dataKey="diastolicMin"
-                              stroke="#f97316"
-                              strokeWidth={1.5}
-                              dot={false}
-                              name="Diastolic min"
-                            />
-                            <Line
-                              type="monotone"
-                              dataKey="diastolicAvg"
-                              stroke="#f97316"
-                              strokeWidth={2}
-                              dot={false}
-                              name="Diastolic avg"
-                            />
-                            <Line
-                              type="monotone"
-                              dataKey="diastolicMax"
-                              stroke="#f97316"
-                              strokeWidth={1.5}
-                              dot={false}
-                              name="Diastolic max"
-                            />
+                            <Line type="monotone" dataKey="systolicMin" stroke="#ef4444" strokeWidth={1.5} dot={false} name="Systolic min" />
+                            <Line type="monotone" dataKey="systolicAvg" stroke="#ef4444" strokeWidth={2} dot={false} name="Systolic avg" />
+                            <Line type="monotone" dataKey="systolicMax" stroke="#ef4444" strokeWidth={1.5} dot={false} name="Systolic max" />
+                            <Line type="monotone" dataKey="diastolicMin" stroke="#f97316" strokeWidth={1.5} dot={false} name="Diastolic min" />
+                            <Line type="monotone" dataKey="diastolicAvg" stroke="#f97316" strokeWidth={2} dot={false} name="Diastolic avg" />
+                            <Line type="monotone" dataKey="diastolicMax" stroke="#f97316" strokeWidth={1.5} dot={false} name="Diastolic max" />
                           </LineChart>
                         </ResponsiveContainer>
                       </AnalyticsCard>
@@ -856,7 +610,7 @@ export function AnalyticsClient({ userPreferences }: AnalyticsClientProps) {
                   </section>
                 )}
 
-              {/* BP vs Glucose & Correlation Charts */}
+              {/* ── BP vs Glucose & Correlation ── */}
               {data.bloodPressure.length > 0 &&
                 data.bloodGlucose.length > 0 &&
                 (userPreferences.enabledAnalytics.bpVsGlucose ||
@@ -886,42 +640,13 @@ export function AnalyticsClient({ userPreferences }: AnalyticsClientProps) {
                             )}
                           >
                             <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                            <XAxis
-                              dataKey="label"
-                              tick={{ fontSize: 10 }}
-                              interval="preserveStartEnd"
-                            />
-                            <YAxis
-                              yAxisId="left"
-                              tick={{ fontSize: 10 }}
-                              label={{ value: 'mm Hg', angle: -90, position: 'insideLeft' }}
-                            />
-                            <YAxis
-                              yAxisId="right"
-                              orientation="right"
-                              tick={{ fontSize: 10 }}
-                              label={{ value: 'mg/dL', angle: 90, position: 'insideRight' }}
-                            />
+                            <XAxis dataKey="label" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
+                            <YAxis yAxisId="left" tick={{ fontSize: 10 }} label={{ value: 'mm Hg', angle: -90, position: 'insideLeft' }} />
+                            <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} label={{ value: 'mg/dL', angle: 90, position: 'insideRight' }} />
                             <Tooltip />
                             <Legend />
-                            <Line
-                              yAxisId="left"
-                              type="monotone"
-                              dataKey="systolic"
-                              name="Systolic BP (mm Hg)"
-                              stroke="#ef4444"
-                              strokeWidth={2}
-                              dot={false}
-                            />
-                            <Line
-                              yAxisId="right"
-                              type="monotone"
-                              dataKey="glucose"
-                              name="Glucose (mg/dL)"
-                              stroke="#38bdf8"
-                              strokeWidth={2}
-                              dot={false}
-                            />
+                            <Line yAxisId="left" type="monotone" dataKey="systolic" name="Systolic BP (mm Hg)" stroke="#ef4444" strokeWidth={2} dot={false} />
+                            <Line yAxisId="right" type="monotone" dataKey="glucose" name="Glucose (mg/dL)" stroke="#38bdf8" strokeWidth={2} dot={false} />
                           </LineChart>
                         </ResponsiveContainer>
                       </AnalyticsCard>
@@ -964,6 +689,7 @@ export function AnalyticsClient({ userPreferences }: AnalyticsClientProps) {
                   </section>
                 )}
 
+              {/* ── Insights ── */}
               <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/60">
                 <h2 className="mb-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
                   Insights
@@ -992,6 +718,346 @@ export function AnalyticsClient({ userPreferences }: AnalyticsClientProps) {
   );
 }
 
+// ─── Time in Ranges Chart ───────────────────────────────────────────────────
+
+type TIRProps = {
+  tir: { veryLow: ZoneStat; low: ZoneStat; target: ZoneStat; high: ZoneStat; veryHigh: ZoneStat };
+};
+
+function TimeInRangesChart({ tir }: TIRProps) {
+  const zones = [
+    { key: 'veryHigh', label: 'Very High', range: '>250 mg/dL', color: '#f97316', stat: tir.veryHigh },
+    { key: 'high', label: 'High', range: '181–250 mg/dL', color: '#eab308', stat: tir.high },
+    { key: 'target', label: 'Target Range', range: '70–180 mg/dL', color: '#22c55e', stat: tir.target },
+    { key: 'low', label: 'Low', range: '54–69 mg/dL', color: '#fca5a5', stat: tir.low },
+    { key: 'veryLow', label: 'Very Low', range: '<54 mg/dL', color: '#ef4444', stat: tir.veryLow },
+  ] as const;
+
+  const highCombined = tir.high.pct + tir.veryHigh.pct;
+  const lowCombined = tir.low.pct + tir.veryLow.pct;
+
+  return (
+    <div className="flex gap-4" data-testid="time-in-ranges">
+      {/* Stacked vertical bar */}
+      <div className="flex w-14 flex-shrink-0 flex-col overflow-hidden rounded-lg" style={{ height: 240 }}>
+        {zones.map((z) => (
+          <div
+            key={z.key}
+            style={{ backgroundColor: z.color, height: `${z.stat.pct}%`, minHeight: z.stat.pct > 0 ? 4 : 0 }}
+            title={`${z.label}: ${z.stat.pct}%`}
+          />
+        ))}
+      </div>
+
+      {/* Zone rows */}
+      <div className="flex flex-1 flex-col justify-between py-1">
+        {zones.map((z, i) => (
+          <div key={z.key} className="flex items-center gap-2">
+            <div className="h-3 w-3 flex-shrink-0 rounded-sm" style={{ backgroundColor: z.color }} />
+            <div className="flex flex-1 items-baseline justify-between gap-1">
+              <div>
+                <span className="text-xs font-medium text-slate-800 dark:text-slate-200">{z.label}</span>
+                <span className="ml-1 text-[10px] text-slate-500 dark:text-slate-400">{z.range}</span>
+              </div>
+              <div className="text-right">
+                <span className="text-sm font-bold text-slate-900 dark:text-slate-100">{z.stat.pct}%</span>
+                <span className="ml-1 text-[10px] text-slate-500 dark:text-slate-400">
+                  ({fmtTime(z.stat.timeMinutes)})
+                </span>
+              </div>
+            </div>
+            {/* Goal indicators */}
+            {i === 0 && (
+              <div className="ml-1 text-[10px] font-medium text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                {highCombined}%
+                <br />
+                <span className={highCombined < 25 ? 'text-green-600' : 'text-amber-500'}>goal &lt;25%</span>
+              </div>
+            )}
+            {i === 2 && (
+              <div className="ml-1 text-[10px] font-medium text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                <span className={tir.target.pct >= 70 ? 'text-green-600' : 'text-amber-500'}>goal &gt;70%</span>
+              </div>
+            )}
+            {i === 3 && (
+              <div className="ml-1 text-[10px] font-medium text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                {lowCombined}%
+                <br />
+                <span className={lowCombined < 4 ? 'text-green-600' : 'text-rose-500'}>goal &lt;4%</span>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Glucose Statistics Panel ───────────────────────────────────────────────
+
+type GlucoseStatsPanelProps = {
+  stats: { averageGlucose: number; gmi: number; glucoseVariability: number; daysOfData: number };
+};
+
+function GlucoseStatsPanel({ stats }: GlucoseStatsPanelProps) {
+  const cvOk = stats.glucoseVariability <= 36;
+  const avgOk = stats.averageGlucose <= 154;
+  const gmiOk = stats.gmi <= 7.0;
+
+  return (
+    <div className="flex flex-col gap-5 py-2" data-testid="glucose-stats">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+          Average Glucose
+        </p>
+        <div className="mt-1 flex items-baseline gap-2">
+          <span className="text-4xl font-bold text-slate-900 dark:text-slate-100">
+            {stats.averageGlucose}
+          </span>
+          <span className="text-sm text-slate-500">mg/dL</span>
+          <span className={`ml-auto text-xs font-medium ${avgOk ? 'text-green-600' : 'text-amber-500'}`}>
+            goal ≤154 mg/dL
+          </span>
+        </div>
+      </div>
+
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+          Glucose Management Indicator (GMI)
+        </p>
+        <p className="mt-0.5 text-[10px] text-slate-400 dark:text-slate-500">
+          Approximate A1C level based on average glucose.
+        </p>
+        <div className="mt-1 flex items-baseline gap-2">
+          <span className="text-4xl font-bold text-slate-900 dark:text-slate-100">
+            {stats.gmi}%
+          </span>
+          <span className={`ml-auto text-xs font-medium ${gmiOk ? 'text-green-600' : 'text-amber-500'}`}>
+            goal ≤7.0%
+          </span>
+        </div>
+      </div>
+
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+          Glucose Variability (%CV)
+        </p>
+        <div className="mt-1 flex items-baseline gap-2">
+          <span className="text-4xl font-bold text-slate-900 dark:text-slate-100">
+            {stats.glucoseVariability}%
+          </span>
+          <span
+            className={`ml-auto rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+              cvOk ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400'
+            }`}
+          >
+            target ≤36%
+          </span>
+        </div>
+        <p className="mt-0.5 text-[10px] text-slate-400 dark:text-slate-500">
+          Defined as percent coefficient of variation.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ─── AGP Chart ──────────────────────────────────────────────────────────────
+
+type AGPChartProps = { agp: { slots: AGPSlot[]; hourlyAverages: { label: string; avg: number }[] } };
+
+function AGPChart({ agp }: AGPChartProps) {
+  // Show labels every 6 slots (3 hours), starting from slot 0
+  const tickSlots = new Set([0, 6, 12, 18, 24, 30, 36, 42, 47]);
+
+  const chartData = agp.slots.map((s) => ({
+    ...s,
+    // Recharts Area expects [low, high] for the band; use p5->p95 outer, p25->p75 inner
+    outerBand: [s.p5, s.p95] as [number, number],
+    innerBand: [s.p25, s.p75] as [number, number],
+  }));
+
+  return (
+    <div>
+      {/* Hourly averages header row */}
+      <div className="mb-1 flex overflow-hidden rounded text-center">
+        {agp.hourlyAverages.map((h) => (
+          <div key={h.label} className="flex-1 border-r border-slate-200 dark:border-slate-700 last:border-r-0">
+            <p className="text-[10px] text-slate-400 dark:text-slate-500">{h.label}</p>
+            <p className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">{h.avg > 0 ? h.avg : '—'}</p>
+          </div>
+        ))}
+      </div>
+
+      <ResponsiveContainer width="100%" height={260}>
+        <ComposedChart data={chartData} margin={{ top: 4, right: 20, left: 0, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.4} />
+          <XAxis
+            dataKey="slot"
+            type="number"
+            domain={[0, 47]}
+            ticks={[...tickSlots]}
+            tickFormatter={(slot) => chartData[slot]?.label ?? ''}
+            tick={{ fontSize: 10 }}
+          />
+          <YAxis domain={[0, 350]} tick={{ fontSize: 10 }} tickCount={8} />
+          <Tooltip
+            formatter={(val, name) => [`${Array.isArray(val) ? val.join('–') : val} mg/dL`, name]}
+            labelFormatter={(slot) => chartData[slot as number]?.label ?? ''}
+          />
+
+          {/* Target range bands */}
+          <ReferenceLine y={180} stroke="#16a34a" strokeWidth={1.5} strokeDasharray="0" label={{ value: '180', position: 'right', fontSize: 9, fill: '#16a34a' }} />
+          <ReferenceLine y={70} stroke="#16a34a" strokeWidth={1.5} strokeDasharray="0" label={{ value: '70', position: 'right', fontSize: 9, fill: '#16a34a' }} />
+
+          {/* 5th–95th percentile outer band (range area — no white-fill masking) */}
+          <Area
+            type="monotone"
+            dataKey="outerBand"
+            stroke="none"
+            fill="#93c5fd"
+            fillOpacity={0.2}
+            name="5th–95th %ile"
+            legendType="none"
+          />
+
+          {/* 25th–75th percentile inner band */}
+          <Area
+            type="monotone"
+            dataKey="innerBand"
+            stroke="none"
+            fill="#3b82f6"
+            fillOpacity={0.35}
+            name="25th–75th %ile"
+            legendType="none"
+          />
+
+          {/* Median line */}
+          <Line
+            type="monotone"
+            dataKey="p50"
+            stroke="#1d4ed8"
+            strokeWidth={2.5}
+            dot={false}
+            name="Median (50%)"
+          />
+        </ComposedChart>
+      </ResponsiveContainer>
+
+      <div className="mt-1 flex items-center gap-4 text-[10px] text-slate-500 dark:text-slate-400">
+        <span className="flex items-center gap-1"><span className="inline-block h-2 w-4 rounded" style={{ background: '#3b82f6', opacity: 0.6 }} />25th–75th %ile</span>
+        <span className="flex items-center gap-1"><span className="inline-block h-2 w-4 rounded" style={{ background: '#93c5fd', opacity: 0.4 }} />5th–95th %ile</span>
+        <span className="flex items-center gap-1"><span className="inline-block h-0.5 w-4 bg-blue-700" />Median (50%)</span>
+        <span className="flex items-center gap-1"><span className="inline-block h-0.5 w-4 bg-green-600" />Target range</span>
+      </div>
+    </div>
+  );
+}
+
+// ─── Glucose Patterns Chart ─────────────────────────────────────────────────
+
+type GlucosePatternsProps = {
+  readings: { timestamp: string; value: number; context?: string }[];
+};
+
+function GlucosePatternsChart({ readings }: GlucosePatternsProps) {
+  const scatterData = readings.map((r) => {
+    const d = new Date(r.timestamp);
+    const timeOfDay = d.getHours() + d.getMinutes() / 60;
+    return { x: timeOfDay, y: r.value, color: getZoneColor(r.value) };
+  });
+
+  // Group colors by zone for legend
+  const ZONES = [
+    { label: 'Very High >250', color: '#f97316' },
+    { label: 'High 181–250', color: '#eab308' },
+    { label: 'Target 70–180', color: '#22c55e' },
+    { label: 'Low 54–69', color: '#fca5a5' },
+    { label: 'Very Low <54', color: '#ef4444' },
+  ];
+
+  const sections = [
+    { label: 'Overnight', x: 3 },
+    { label: 'Morning', x: 9 },
+    { label: 'Afternoon', x: 15 },
+    { label: 'Evening', x: 21 },
+  ];
+
+  return (
+    <div data-testid="glucose-patterns">
+      <ResponsiveContainer width="100%" height={280}>
+        <ComposedChart margin={{ top: 8, right: 20, left: 0, bottom: 20 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.4} />
+          <XAxis
+            type="number"
+            dataKey="x"
+            domain={[0, 24]}
+            ticks={[0, 3, 6, 9, 12, 15, 18, 21, 24]}
+            tickFormatter={(h) => {
+              if (h === 0 || h === 24) return '12am';
+              if (h === 12) return '12pm';
+              return h < 12 ? `${h}am` : `${h - 12}pm`;
+            }}
+            tick={{ fontSize: 10 }}
+          />
+          <YAxis domain={[40, 360]} tick={{ fontSize: 10 }} tickCount={8} />
+          <Tooltip
+            formatter={(val) => [`${val} mg/dL`, 'Glucose']}
+            labelFormatter={(x) => {
+              const h = Math.floor(x as number);
+              const m = Math.round(((x as number) - h) * 60);
+              return `${h}:${String(m).padStart(2, '0')}`;
+            }}
+          />
+
+          {/* Zone reference lines */}
+          <ReferenceLine y={180} stroke="#16a34a" strokeWidth={1.5} label={{ value: '180', position: 'right', fontSize: 9, fill: '#16a34a' }} />
+          <ReferenceLine y={70} stroke="#16a34a" strokeWidth={1.5} label={{ value: '70', position: 'right', fontSize: 9, fill: '#16a34a' }} />
+          <ReferenceLine y={250} stroke="#f97316" strokeWidth={1} strokeDasharray="4 4" />
+          <ReferenceLine y={54} stroke="#ef4444" strokeWidth={1} strokeDasharray="4 4" />
+
+          {/* Time of day dividers */}
+          {[6, 12, 18].map((h) => (
+            <ReferenceLine key={h} x={h} stroke="#94a3b8" strokeWidth={1} strokeDasharray="3 3" />
+          ))}
+
+          {/* Scatter points — single series, colored per point */}
+          <ZAxis range={[20, 20]} />
+          <Scatter
+            data={scatterData}
+            name="Glucose"
+            shape={(props) => {
+              const { cx, cy, payload } = props as { cx: number; cy: number; payload: { color: string } };
+              return <circle cx={cx} cy={cy} r={3} fill={payload.color} fillOpacity={0.7} stroke="none" />;
+            }}
+          />
+
+          {/* Section labels via reference lines with label only */}
+          {sections.map((s) => (
+            <ReferenceLine
+              key={s.label}
+              x={s.x}
+              stroke="none"
+              label={{ value: s.label, position: 'insideBottom', fontSize: 9, fill: '#94a3b8', dy: 18 }}
+            />
+          ))}
+        </ComposedChart>
+      </ResponsiveContainer>
+
+      <div className="mt-1 flex flex-wrap items-center gap-3 text-[10px] text-slate-500 dark:text-slate-400">
+        {ZONES.map((z) => (
+          <span key={z.label} className="flex items-center gap-1">
+            <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: z.color }} />
+            {z.label}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Shared helpers ─────────────────────────────────────────────────────────
+
 type DualSeriesPoint = {
   time: string;
   label: string;
@@ -1005,71 +1071,21 @@ function mergeSeriesForDualAxis(
 ): DualSeriesPoint[] {
   const byTime = new Map<string, DualSeriesPoint>();
 
-  // First, add all insulin points
   insulin.forEach((p) => {
     const label = formatDateTimeDDMMYYYY(p.time);
-    byTime.set(p.time, {
-      time: p.time,
-      label,
-      insulinUnits: p.insulinUnits,
-    });
+    byTime.set(p.time, { time: p.time, label, insulinUnits: p.insulinUnits });
   });
 
-  // Then, add glucose points (merge with existing or create new)
   glucose.forEach((p) => {
     const label = formatDateTimeDDMMYYYY(p.time);
     const existing = byTime.get(p.time);
     if (existing) {
       existing.glucose = p.glucose;
     } else {
-      byTime.set(p.time, {
-        time: p.time,
-        label,
-        glucose: p.glucose,
-      });
+      byTime.set(p.time, { time: p.time, label, glucose: p.glucose });
     }
   });
 
-  // Sort by time
-  return Array.from(byTime.values()).sort(
-    (a, b) => new Date(a.time).getTime() - new Date(b.time).getTime(),
-  );
-}
-
-function mergeSeriesForDualAxisBP(
-  bp: { time: string; systolic: number }[],
-  glucose: { time: string; glucose: number }[],
-): DualSeriesPointBP[] {
-  const byTime = new Map<string, DualSeriesPointBP>();
-
-  // First, add all BP points
-  bp.forEach((p) => {
-    const label = formatDateTimeDDMMYYYY(p.time);
-    byTime.set(p.time, {
-      time: p.time,
-      label,
-      systolic: p.systolic,
-      glucose: null,
-    });
-  });
-
-  // Then, add glucose points (merge with existing or create new)
-  glucose.forEach((p) => {
-    const label = formatDateTimeDDMMYYYY(p.time);
-    const existing = byTime.get(p.time);
-    if (existing) {
-      existing.glucose = p.glucose;
-    } else {
-      byTime.set(p.time, {
-        time: p.time,
-        label,
-        systolic: null,
-        glucose: p.glucose,
-      });
-    }
-  });
-
-  // Sort by time
   return Array.from(byTime.values()).sort(
     (a, b) => new Date(a.time).getTime() - new Date(b.time).getTime(),
   );
@@ -1081,6 +1097,32 @@ type DualSeriesPointBP = {
   systolic: number | null;
   glucose: number | null;
 };
+
+function mergeSeriesForDualAxisBP(
+  bp: { time: string; systolic: number }[],
+  glucose: { time: string; glucose: number }[],
+): DualSeriesPointBP[] {
+  const byTime = new Map<string, DualSeriesPointBP>();
+
+  bp.forEach((p) => {
+    const label = formatDateTimeDDMMYYYY(p.time);
+    byTime.set(p.time, { time: p.time, label, systolic: p.systolic, glucose: null });
+  });
+
+  glucose.forEach((p) => {
+    const label = formatDateTimeDDMMYYYY(p.time);
+    const existing = byTime.get(p.time);
+    if (existing) {
+      existing.glucose = p.glucose;
+    } else {
+      byTime.set(p.time, { time: p.time, label, systolic: null, glucose: p.glucose });
+    }
+  });
+
+  return Array.from(byTime.values()).sort(
+    (a, b) => new Date(a.time).getTime() - new Date(b.time).getTime(),
+  );
+}
 
 type AnalyticsCardProps = {
   title: string;

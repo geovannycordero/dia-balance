@@ -3,7 +3,10 @@ import { z } from 'zod';
 import { ActionType } from '@/app/constants/action-types';
 
 export const EnabledAnalyticsSchema = z.object({
+  glucoseOverview: z.boolean().default(true),
   bloodGlucoseTrend: z.boolean(),
+  agpChart: z.boolean().default(true),
+  glucosePatterns: z.boolean().default(true),
   dailyGlucoseSummary: z.boolean(),
   insulinVsGlucose: z.boolean(),
   exerciseHydration: z.boolean(),
@@ -46,7 +49,10 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
     ActionType.BLOOD_PRESSURE,
   ],
   enabledAnalytics: {
+    glucoseOverview: true,
     bloodGlucoseTrend: true,
+    agpChart: true,
+    glucosePatterns: true,
     dailyGlucoseSummary: true,
     insulinVsGlucose: true,
     exerciseHydration: true,

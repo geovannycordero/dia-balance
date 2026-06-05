@@ -136,6 +136,10 @@ export async function GET(req: Request) {
 
   const bpGlucoseCorrelation = calculateBPCorrelation(bloodPressure, bloodGlucose);
 
+  const timeInRanges = computeTimeInRanges(bloodGlucose);
+  const glucoseStats = computeGlucoseStats(bloodGlucose);
+  const agp = computeAGP(bloodGlucose);
+
   const insights = buildInsights({
     bloodGlucose,
     insulin,
@@ -165,6 +169,9 @@ export async function GET(req: Request) {
     hydrationByDay,
     weightTrend,
     bpGlucoseCorrelation,
+    timeInRanges,
+    glucoseStats,
+    agp,
     insights,
   });
 }
@@ -371,6 +378,151 @@ function calculateBPCorrelation(
     strength,
     direction,
   };
+}
+
+type ZoneStat = { pct: number; timeMinutes: number };
+
+function computeTimeInRanges(readings: { value: number }[]): {
+  veryLow: ZoneStat;
+  low: ZoneStat;
+  target: ZoneStat;
+  high: ZoneStat;
+  veryHigh: ZoneStat;
+} {
+  const total = readings.length;
+  if (total === 0) {
+    const empty = { pct: 0, timeMinutes: 0 };
+    return { veryLow: empty, low: empty, target: empty, high: empty, veryHigh: empty };
+  }
+
+  const minutesPerDay = 24 * 60;
+  const counts = { veryLow: 0, low: 0, target: 0, high: 0, veryHigh: 0 };
+  for (const r of readings) {
+    if (r.value < 54) counts.veryLow++;
+    else if (r.value < 70) counts.low++;
+    else if (r.value <= 180) counts.target++;
+    else if (r.value <= 250) counts.high++;
+    else counts.veryHigh++;
+  }
+
+  const roundPct = (count: number) => Math.round((count / total) * 100);
+  const veryLowPct = roundPct(counts.veryLow);
+  const lowPct = roundPct(counts.low);
+  const highPct = roundPct(counts.high);
+  const veryHighPct = roundPct(counts.veryHigh);
+  // Derive target as remainder so all five zones always sum to exactly 100%
+  const targetPct = 100 - veryLowPct - lowPct - highPct - veryHighPct;
+
+  const toPctStat = (pct: number): ZoneStat => ({
+    pct,
+    timeMinutes: Math.round((pct / 100) * minutesPerDay),
+  });
+
+  return {
+    veryLow: toPctStat(veryLowPct),
+    low: toPctStat(lowPct),
+    target: toPctStat(targetPct),
+    high: toPctStat(highPct),
+    veryHigh: toPctStat(veryHighPct),
+  };
+}
+
+function computeGlucoseStats(readings: { timestamp: Date; value: number }[]): {
+  averageGlucose: number;
+  gmi: number;
+  glucoseVariability: number;
+  daysOfData: number;
+} {
+  if (readings.length === 0) {
+    return { averageGlucose: 0, gmi: 0, glucoseVariability: 0, daysOfData: 0 };
+  }
+
+  const values = readings.map((r) => r.value);
+  const mean = values.reduce((s, v) => s + v, 0) / values.length;
+  const variance = values.reduce((s, v) => s + (v - mean) ** 2, 0) / values.length;
+  const stdDev = Math.sqrt(variance);
+  const gmi = Math.round((3.31 + 0.02392 * mean) * 10) / 10;
+  const cv = mean > 0 ? Math.round((stdDev / mean) * 100 * 10) / 10 : 0;
+
+  const days = new Set(
+    readings.map((r) => {
+      const d = new Date(r.timestamp);
+      return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+    }),
+  ).size;
+
+  return {
+    averageGlucose: Math.round(mean),
+    gmi,
+    glucoseVariability: cv,
+    daysOfData: days,
+  };
+}
+
+type AGPSlot = {
+  slot: number;
+  label: string;
+  p5: number;
+  p25: number;
+  p50: number;
+  p75: number;
+  p95: number;
+};
+
+function computeAGP(readings: { timestamp: Date; value: number }[]): {
+  slots: AGPSlot[];
+  hourlyAverages: { label: string; avg: number }[];
+} {
+  // Group readings into 48 half-hour slots (0 = 00:00, 1 = 00:30, ...)
+  const buckets: number[][] = Array.from({ length: 48 }, () => []);
+  for (const r of readings) {
+    const d = new Date(r.timestamp);
+    const slot = d.getHours() * 2 + (d.getMinutes() >= 30 ? 1 : 0);
+    buckets[slot].push(r.value);
+  }
+
+  function percentile(sorted: number[], p: number): number {
+    if (sorted.length === 0) return 0;
+    const idx = (p / 100) * (sorted.length - 1);
+    const lo = Math.floor(idx);
+    const hi = Math.ceil(idx);
+    return Math.round(sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo));
+  }
+
+  function slotLabel(slot: number): string {
+    const totalMinutes = slot * 30;
+    const h = Math.floor(totalMinutes / 60);
+    const m = totalMinutes % 60;
+    const period = h < 12 ? 'am' : 'pm';
+    const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+    return m === 0 ? `${h12}${period}` : `${h12}:${String(m).padStart(2, '0')}${period}`;
+  }
+
+  const slots: AGPSlot[] = buckets.map((vals, slot) => {
+    const sorted = [...vals].sort((a, b) => a - b);
+    return {
+      slot,
+      label: slotLabel(slot),
+      p5: percentile(sorted, 5),
+      p25: percentile(sorted, 25),
+      p50: percentile(sorted, 50),
+      p75: percentile(sorted, 75),
+      p95: percentile(sorted, 95),
+    };
+  });
+
+  // 2-hour averages (12 buckets: 0-2am, 2-4am, ...)
+  const hourlyAverages = Array.from({ length: 12 }, (_, i) => {
+    const startSlot = i * 4;
+    const vals = buckets.slice(startSlot, startSlot + 4).flat();
+    const avg = vals.length > 0 ? Math.round(vals.reduce((s, v) => s + v, 0) / vals.length) : 0;
+    const h = i * 2;
+    const period = h < 12 ? 'am' : 'pm';
+    const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+    return { label: `${h12}${period}`, avg };
+  });
+
+  return { slots, hourlyAverages };
 }
 
 type InsightContext = {
