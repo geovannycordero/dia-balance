@@ -16,8 +16,8 @@ type AnalyticsData = {
     from: string;
     to: string;
   };
-  bloodGlucose: { timestamp: string; value: number; context?: string }[];
-  insulin: { timestamp: string; units: number; insulinType?: string }[];
+  bloodGlucose: { timestamp: string; value: number; context?: string; notes?: string | null }[];
+  insulin: { timestamp: string; units: number; insulinType?: string; notes?: string | null }[];
   exercise: { timestamp: string; type?: string; duration: number; intensity?: string }[];
   sleep: { timestamp: string; hours: number; quality?: number | null }[];
   weight: { timestamp: string; value: number; unit?: string | null }[];
@@ -27,6 +27,7 @@ type AnalyticsData = {
     systolic: number;
     diastolic: number;
     category: string;
+    notes?: string | null;
   }[];
   dailyGlucoseSummary: { date: string; avg: number; min: number; max: number; count: number }[];
   dailyBloodPressureSummary: {
@@ -159,13 +160,13 @@ export function exportToPDF(data: AnalyticsData, agpChartImage?: string): void {
       const dateObj = new Date(r.timestamp);
       const dayKey = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
       if (dayKey !== currentDay) { currentDay = dayKey; dayIndex++; }
-      glucoseData.push([formatDateTimeDDMMYYYY(r.timestamp), `${r.value} mg/dL`, r.context ?? '-']);
+      glucoseData.push([formatDateTimeDDMMYYYY(r.timestamp), `${r.value} mg/dL`, r.context ?? '-', r.notes ?? '-']);
       dayIndices.push(dayIndex);
     });
 
     autoTable(doc, {
       startY: yPos,
-      head: [['Timestamp', 'Value', 'Context']],
+      head: [['Timestamp', 'Value', 'Context', 'Notes']],
       body: glucoseData,
       theme: 'plain',
       headStyles: { fillColor: [56, 189, 248] },
@@ -195,11 +196,12 @@ export function exportToPDF(data: AnalyticsData, agpChartImage?: string): void {
         : r.category === 'hypertension-stage-1' ? 'Stage 1'
         : r.category === 'hypertension-stage-2' ? 'Stage 2'
         : 'Crisis',
+      r.notes ?? '-',
     ]);
 
     autoTable(doc, {
       startY: yPos,
-      head: [['Timestamp', 'Reading', 'Category']],
+      head: [['Timestamp', 'Reading', 'Category', 'Notes']],
       body: bpData.slice(0, 20),
       theme: 'striped',
       headStyles: { fillColor: [239, 68, 68] },
@@ -243,11 +245,12 @@ export function exportToPDF(data: AnalyticsData, agpChartImage?: string): void {
       formatDateTimeDDMMYYYY(r.timestamp),
       `${r.units} units`,
       r.insulinType ?? '-',
+      r.notes ?? '-',
     ]);
 
     autoTable(doc, {
       startY: yPos,
-      head: [['Timestamp', 'Units', 'Type']],
+      head: [['Timestamp', 'Units', 'Type', 'Notes']],
       body: insulinData.slice(0, 20),
       theme: 'striped',
       headStyles: { fillColor: [168, 85, 247] },
