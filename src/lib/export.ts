@@ -160,7 +160,7 @@ export function exportToPDF(data: AnalyticsData, agpChartImage?: string): void {
       const dateObj = new Date(r.timestamp);
       const dayKey = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
       if (dayKey !== currentDay) { currentDay = dayKey; dayIndex++; }
-      glucoseData.push([formatDateTimeDDMMYYYY(r.timestamp), `${r.value} mg/dL`, r.context ?? '-', r.notes ?? '-']);
+      glucoseData.push([formatDateTimeDDMMYYYY(r.timestamp), `${r.value} mg/dL`, r.context ?? '-', r.notes?.trim() || '-']);
       dayIndices.push(dayIndex);
     });
 
@@ -196,7 +196,7 @@ export function exportToPDF(data: AnalyticsData, agpChartImage?: string): void {
         : r.category === 'hypertension-stage-1' ? 'Stage 1'
         : r.category === 'hypertension-stage-2' ? 'Stage 2'
         : 'Crisis',
-      r.notes ?? '-',
+      r.notes?.trim() || '-',
     ]);
 
     autoTable(doc, {
@@ -245,7 +245,7 @@ export function exportToPDF(data: AnalyticsData, agpChartImage?: string): void {
       formatDateTimeDDMMYYYY(r.timestamp),
       `${r.units} units`,
       r.insulinType ?? '-',
-      r.notes ?? '-',
+      r.notes?.trim() || '-',
     ]);
 
     autoTable(doc, {

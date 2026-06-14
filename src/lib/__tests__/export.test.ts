@@ -126,6 +126,28 @@ describe('exportToPDF — blood glucose table', () => {
     const body = call?.body as string[][];
     expect(body[0][3]).toBe('-');
   });
+
+  it('renders "-" in the notes cell when notes is an empty string', () => {
+    exportToPDF({
+      ...baseData,
+      bloodGlucose: [{ timestamp: glucoseTimestamp, value: 120, notes: '' }],
+    });
+
+    const call = getAutoTableCallForHead(['Timestamp', 'Value', 'Context', 'Notes']);
+    const body = call?.body as string[][];
+    expect(body[0][3]).toBe('-');
+  });
+
+  it('renders "-" in the notes cell when notes is a whitespace-only string', () => {
+    exportToPDF({
+      ...baseData,
+      bloodGlucose: [{ timestamp: glucoseTimestamp, value: 120, notes: '   ' }],
+    });
+
+    const call = getAutoTableCallForHead(['Timestamp', 'Value', 'Context', 'Notes']);
+    const body = call?.body as string[][];
+    expect(body[0][3]).toBe('-');
+  });
 });
 
 describe('exportToPDF — blood pressure table', () => {
@@ -162,6 +184,17 @@ describe('exportToPDF — blood pressure table', () => {
     const body = call?.body as string[][];
     expect(body[0][3]).toBe('-');
   });
+
+  it('renders "-" in the notes cell when notes is an empty string', () => {
+    exportToPDF({
+      ...baseData,
+      bloodPressure: [{ timestamp: bpTimestamp, systolic: 120, diastolic: 80, category: 'normal', notes: '' }],
+    });
+
+    const call = getAutoTableCallForHead(['Timestamp', 'Reading', 'Category', 'Notes']);
+    const body = call?.body as string[][];
+    expect(body[0][3]).toBe('-');
+  });
 });
 
 describe('exportToPDF — insulin table', () => {
@@ -192,6 +225,17 @@ describe('exportToPDF — insulin table', () => {
     exportToPDF({
       ...baseData,
       insulin: [{ timestamp: insulinTimestamp, units: 10 }],
+    });
+
+    const call = getAutoTableCallForHead(['Timestamp', 'Units', 'Type', 'Notes']);
+    const body = call?.body as string[][];
+    expect(body[0][3]).toBe('-');
+  });
+
+  it('renders "-" in the notes cell when notes is an empty string', () => {
+    exportToPDF({
+      ...baseData,
+      insulin: [{ timestamp: insulinTimestamp, units: 10, notes: '' }],
     });
 
     const call = getAutoTableCallForHead(['Timestamp', 'Units', 'Type', 'Notes']);
