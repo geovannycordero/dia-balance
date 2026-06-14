@@ -63,6 +63,7 @@ export async function GET(req: Request) {
       timestamp: a.timestamp,
       value: a.bloodGlucose as number,
       context: a.glucoseContext ?? undefined,
+      notes: a.notes ?? undefined,
     }));
 
   const insulin = actions
@@ -71,6 +72,7 @@ export async function GET(req: Request) {
       timestamp: a.timestamp,
       units: a.insulinUnits as number,
       insulinType: a.insulinType ?? undefined,
+      notes: a.notes ?? undefined,
     }));
 
   const exercise = actions
@@ -120,6 +122,7 @@ export async function GET(req: Request) {
         a.bloodPressureSystolic as number,
         a.bloodPressureDiastolic as number,
       ),
+      notes: a.notes ?? undefined,
     }));
 
   const medication = actions.filter((a: Action) => a.type === ActionType.MEDICATION);

@@ -891,5 +891,99 @@ describe('/api/analytics', () => {
       const weightInsight = data.insights.find((insight: string) => insight.includes('weight'));
       expect(weightInsight).toBeDefined();
     });
+
+    describe('notes field propagation', () => {
+      it('should include notes in blood glucose entries when present', async () => {
+        const mockActions = [
+          {
+            id: '1',
+            userId: mockUserId,
+            type: ActionType.BLOOD_GLUCOSE,
+            timestamp: new Date('2024-01-01T10:00:00Z'),
+            bloodGlucose: 120,
+            glucoseContext: 'fasting',
+            notes: 'Felt dizzy before reading',
+          },
+        ];
+
+        mockPrisma.action.findMany.mockResolvedValue(mockActions);
+
+        const request = new Request('http://localhost/api/analytics?from=2024-01-01&to=2024-01-01');
+        const response = await GET(request);
+        const data = await response.json();
+
+        expect(response.status).toBe(200);
+        expect(data.bloodGlucose[0].notes).toBe('Felt dizzy before reading');
+      });
+
+      it('should omit notes from blood glucose entries when not present', async () => {
+        const mockActions = [
+          {
+            id: '1',
+            userId: mockUserId,
+            type: ActionType.BLOOD_GLUCOSE,
+            timestamp: new Date('2024-01-01T10:00:00Z'),
+            bloodGlucose: 120,
+            glucoseContext: 'fasting',
+            notes: null,
+          },
+        ];
+
+        mockPrisma.action.findMany.mockResolvedValue(mockActions);
+
+        const request = new Request('http://localhost/api/analytics?from=2024-01-01&to=2024-01-01');
+        const response = await GET(request);
+        const data = await response.json();
+
+        expect(response.status).toBe(200);
+        expect(data.bloodGlucose[0].notes).toBeUndefined();
+      });
+
+      it('should include notes in insulin entries when present', async () => {
+        const mockActions = [
+          {
+            id: '1',
+            userId: mockUserId,
+            type: ActionType.INSULIN,
+            timestamp: new Date('2024-01-01T10:00:00Z'),
+            insulinUnits: 10,
+            insulinType: 'rapid-acting',
+            notes: 'Taken after lunch',
+          },
+        ];
+
+        mockPrisma.action.findMany.mockResolvedValue(mockActions);
+
+        const request = new Request('http://localhost/api/analytics?from=2024-01-01&to=2024-01-01');
+        const response = await GET(request);
+        const data = await response.json();
+
+        expect(response.status).toBe(200);
+        expect(data.insulin[0].notes).toBe('Taken after lunch');
+      });
+
+      it('should include notes in blood pressure entries when present', async () => {
+        const mockActions = [
+          {
+            id: '1',
+            userId: mockUserId,
+            type: ActionType.BLOOD_PRESSURE,
+            timestamp: new Date('2024-01-01T10:00:00Z'),
+            bloodPressureSystolic: 120,
+            bloodPressureDiastolic: 80,
+            notes: 'After morning walk',
+          },
+        ];
+
+        mockPrisma.action.findMany.mockResolvedValue(mockActions);
+
+        const request = new Request('http://localhost/api/analytics?from=2024-01-01&to=2024-01-01');
+        const response = await GET(request);
+        const data = await response.json();
+
+        expect(response.status).toBe(200);
+        expect(data.bloodPressure[0].notes).toBe('After morning walk');
+      });
+    });
   });
 });
