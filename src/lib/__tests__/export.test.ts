@@ -12,7 +12,6 @@ const mockAddImage = jest.fn();
 const mockGetNumberOfPages = jest.fn(() => 1);
 const mockSetPage = jest.fn();
 const mockSplitTextToSize = jest.fn((text: string) => [text]);
-const mockGetInternalPageSize = jest.fn(() => ({ getWidth: () => 210, getHeight: () => 297 }));
 
 const mockDoc = {
   save: mockSave,
