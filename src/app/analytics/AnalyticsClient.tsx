@@ -1,6 +1,5 @@
 'use client';
 
-import { subDays } from 'date-fns';
 import html2canvas from 'html2canvas';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -131,7 +130,7 @@ export function AnalyticsClient({ userPreferences }: AnalyticsClientProps) {
     }
 
     if (preset === RangePreset.YESTERDAY) {
-      const yesterday = subDays(today, 1);
+      const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
       const yesterdayStr = formatLocalDate(yesterday);
       return {
         from: localDateToUTCISO(yesterdayStr),
@@ -141,7 +140,7 @@ export function AnalyticsClient({ userPreferences }: AnalyticsClientProps) {
 
     const daysAgo =
       preset === RangePreset.LAST_7_DAYS ? 7 : preset === RangePreset.LAST_14_DAYS ? 14 : 30;
-    const startDate = subDays(today, daysAgo);
+    const startDate = new Date(today.getTime() - daysAgo * 24 * 60 * 60 * 1000);
     const startDateStr = formatLocalDate(startDate);
     return {
       from: localDateToUTCISO(startDateStr),

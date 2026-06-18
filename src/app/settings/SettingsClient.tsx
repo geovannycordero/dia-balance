@@ -5,7 +5,7 @@ import { useState } from 'react';
 
 import type { UserPreferences } from '@/lib/user-preferences';
 
-import { ActionType, ACTION_TYPES } from '@/app/constants/action-types';
+import { ActionType, ACTION_TYPE_VALUES } from '@/app/constants/action-types';
 import { Navigation } from '@/components/Navigation';
 import { useToast } from '@/components/ToastProvider';
 
@@ -105,7 +105,7 @@ export function SettingsClient({
     }));
   };
 
-  const allActionTypes = Object.values(ACTION_TYPES) as ActionType[];
+  const allActionTypes = ACTION_TYPE_VALUES as readonly ActionType[];
 
   return (
     <>

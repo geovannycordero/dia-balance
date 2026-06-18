@@ -1,4 +1,3 @@
-import { endOfDay, startOfDay, subDays } from 'date-fns';
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 
@@ -41,9 +40,9 @@ export async function GET(req: Request) {
   } else {
     // Default to last 7 days (using UTC dates)
     const today = new Date();
-    const sevenDaysAgo = subDays(today, 7);
-    rangeStart = startOfDay(sevenDaysAgo);
-    rangeEnd = endOfDay(today);
+    const sevenDaysAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+    rangeStart = new Date(sevenDaysAgo.setHours(0, 0, 0, 0));
+    rangeEnd = new Date(today.setHours(23, 59, 59, 999));
   }
 
   const actions = await prisma.action.findMany({
@@ -191,7 +190,7 @@ function summarizeDailyGlucose(readings: { timestamp: Date; value: number; conte
   >();
 
   readings.forEach((r) => {
-    const key = startOfDay(r.timestamp).toISOString();
+    const key = new Date(new Date(r.timestamp).setHours(0, 0, 0, 0)).toISOString();
     const existing = byDay.get(key) ?? {
       date: key,
       count: 0,
@@ -219,7 +218,7 @@ function summarizeDailyTotals(points: TimePoint[]) {
   const byDay = new Map<string, { date: string; total: number }>();
 
   points.forEach((p) => {
-    const key = startOfDay(p.timestamp).toISOString();
+    const key = new Date(new Date(p.timestamp).setHours(0, 0, 0, 0)).toISOString();
     const existing = byDay.get(key) ?? { date: key, total: 0 };
     existing.total += p.value;
     byDay.set(key, existing);
@@ -255,7 +254,7 @@ function summarizeDailyBloodPressure(
   >();
 
   readings.forEach((r) => {
-    const key = startOfDay(r.timestamp).toISOString();
+    const key = new Date(new Date(r.timestamp).setHours(0, 0, 0, 0)).toISOString();
     const existing = byDay.get(key) ?? {
       date: key,
       systolicCount: 0,
