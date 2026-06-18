@@ -130,7 +130,8 @@ export function AnalyticsClient({ userPreferences }: AnalyticsClientProps) {
     }
 
     if (preset === RangePreset.YESTERDAY) {
-      const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
       const yesterdayStr = formatLocalDate(yesterday);
       return {
         from: localDateToUTCISO(yesterdayStr),
@@ -140,7 +141,8 @@ export function AnalyticsClient({ userPreferences }: AnalyticsClientProps) {
 
     const daysAgo =
       preset === RangePreset.LAST_7_DAYS ? 7 : preset === RangePreset.LAST_14_DAYS ? 14 : 30;
-    const startDate = new Date(today.getTime() - daysAgo * 24 * 60 * 60 * 1000);
+    const startDate = new Date(today);
+    startDate.setDate(startDate.getDate() - daysAgo);
     const startDateStr = formatLocalDate(startDate);
     return {
       from: localDateToUTCISO(startDateStr),

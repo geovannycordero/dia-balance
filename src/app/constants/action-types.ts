@@ -12,14 +12,14 @@ export const enum ActionType {
 }
 
 export const ACTION_TYPE_VALUES = [
-  'BLOOD_GLUCOSE',
-  'INSULIN',
-  'MEDICATION',
-  'FOOD',
-  'EXERCISE',
-  'SLEEP',
-  'SYMPTOMS',
-  'WEIGHT',
-  'HYDRATION',
-  'BLOOD_PRESSURE',
+  ActionType.BLOOD_GLUCOSE,
+  ActionType.INSULIN,
+  ActionType.MEDICATION,
+  ActionType.FOOD,
+  ActionType.EXERCISE,
+  ActionType.SLEEP,
+  ActionType.SYMPTOMS,
+  ActionType.WEIGHT,
+  ActionType.HYDRATION,
+  ActionType.BLOOD_PRESSURE,
 ] as const;

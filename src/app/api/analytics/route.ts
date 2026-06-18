@@ -38,9 +38,10 @@ export async function GET(req: Request) {
     rangeStart = new Date(params.from);
     rangeEnd = new Date(params.to);
   } else {
-    // Default to last 7 days (using UTC dates)
+    // Default to last 7 days (local-day boundaries)
     const today = new Date();
-    const sevenDaysAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const sevenDaysAgo = new Date(today);
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
     rangeStart = new Date(sevenDaysAgo.setHours(0, 0, 0, 0));
     rangeEnd = new Date(today.setHours(23, 59, 59, 999));
   }
