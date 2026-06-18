@@ -31,15 +31,6 @@ jest.mock('@/lib/prisma', () => ({
   },
 }));
 
-jest.mock('@/lib/date-utils', () => ({
-  dateStringToUTC: jest.fn((dateString: string) => {
-    return new Date(dateString + 'T00:00:00');
-  }),
-  dateStringToUTCEndOfDay: jest.fn((dateString: string) => {
-    return new Date(dateString + 'T23:59:59.999');
-  }),
-}));
-
 const mockGetServerSession = getServerSession as jest.MockedFunction<typeof getServerSession>;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockPrisma = prisma as any;

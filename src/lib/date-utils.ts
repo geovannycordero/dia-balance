@@ -79,15 +79,6 @@ export function localToUTC(localDateTime: string): string {
 }
 
 /**
- * Alias for localToUTC - converts datetime-local to UTC ISO string
- * @param localDateTime - String in format "YYYY-MM-DDTHH:mm" (local time)
- * @returns ISO string in UTC format "YYYY-MM-DDTHH:mm:ss.sssZ"
- */
-export function localDateTimeToUTCISO(localDateTime: string): string {
-  return localToUTC(localDateTime);
-}
-
-/**
  * Convert a UTC date to datetime-local format for HTML input elements
  * @param utcDate - Date object or ISO string in UTC
  * @returns String in format "YYYY-MM-DDTHH:mm" (local time)
@@ -103,38 +94,6 @@ export function utcToLocal(utcDate: Date | string): string {
   const minutes = String(date.getMinutes()).padStart(2, '0');
 
   return `${year}-${month}-${day}T${hours}:${minutes}`;
-}
-
-/**
- * @deprecated Use localDateToUTCISO instead. This function returns a Date object, but APIs should receive ISO strings.
- * Convert a date string (YYYY-MM-DD) interpreted as local date to UTC Date
- * Used for date filters where user selects a date in their local timezone
- * @param dateString - String in format "YYYY-MM-DD" (interpreted as local date)
- * @returns Date object representing start of day in UTC
- */
-export function dateStringToUTC(dateString: string): Date {
-  if (!dateString) {
-    return new Date();
-  }
-  // Parse as local date (YYYY-MM-DD is interpreted as local midnight)
-  const localDate = new Date(dateString + 'T00:00:00');
-  // Return as Date object (will be stored as UTC in database)
-  return localDate;
-}
-
-/**
- * @deprecated Use localDateToUTCISOEndOfDay instead. This function returns a Date object, but APIs should receive ISO strings.
- * Convert a date string (YYYY-MM-DD) to UTC Date representing end of day
- * @param dateString - String in format "YYYY-MM-DD" (interpreted as local date)
- * @returns Date object representing end of day in UTC
- */
-export function dateStringToUTCEndOfDay(dateString: string): Date {
-  if (!dateString) {
-    return new Date();
-  }
-  // Parse as local date end of day (23:59:59.999)
-  const localDate = new Date(dateString + 'T23:59:59.999');
-  return localDate;
 }
 
 /**
