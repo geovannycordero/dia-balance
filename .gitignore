@@ -87,8 +87,6 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 # Framework / Tooling Artifacts
 ########################################
 
-# Vercel
-.vercel
 
 # Nuxt / Vue / Gatsby (harmless if unused)
 .nuxt

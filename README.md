@@ -380,7 +380,7 @@ yarn prisma db seed         # Seed database
 
 ### Prerequisites for Production
 
-1. **Set up a PostgreSQL database** (e.g., Vercel Postgres, Supabase, Railway, or AWS RDS)
+1. **Set up a PostgreSQL database** (e.g., Supabase, Railway, or AWS RDS)
 2. **Configure environment variables** in your hosting platform
 3. **Set up email service** (Resend recommended)
 
@@ -394,17 +394,6 @@ Ensure these are set in your hosting platform:
 - `RESEND_API_KEY` - Resend API key for email sending
 
 ### Deployment Platforms
-
-#### Vercel (Recommended)
-
-1. Push your code to GitHub
-2. Import project in Vercel
-3. Configure environment variables
-4. Deploy
-
-Vercel automatically detects Next.js and configures build settings.
-
-#### Other Platforms
 
 The application can be deployed to any platform supporting Node.js:
 
