@@ -37,7 +37,7 @@
     "zod": "^4.4.3"
   },
   "resolutions": {
-    "@hono/node-server": ">=2.0.4",
+    "@hono/node-server": ">=2.1.0",
     "brace-expansion": ">=1.1.13",
     "flatted": ">=3.4.2",
     "minimatch": ">=9.0.7",
