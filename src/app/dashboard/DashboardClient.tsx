@@ -290,7 +290,7 @@ export function DashboardClient({
           ...base,
           type: ActionType.FOOD,
           foodDescription: form.foodDescription || '',
-          foodCarbs: form.foodCarbs ? Number(form.foodCarbs) : undefined,
+          foodCarbs: form.foodCarbs ? Number(form.foodCarbs) : null,
         };
       case ActionType.EXERCISE:
         return {
@@ -898,7 +898,7 @@ function renderTypeSpecificFields(
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
-              Aprox. Carbs
+              Approx. Carbs
             </label>
             <select
               className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-2 py-2 text-sm text-slate-900 outline-none ring-sky-500/60 focus:border-sky-500 focus:ring-2 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
