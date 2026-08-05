@@ -13,9 +13,9 @@ updates:
       timezone: 'America/Costa_Rica'
     open-pull-requests-limit: 10
     reviewers:
-      - 'gehovah'
+      - 'geovannycordero'
     assignees:
-      - 'gehovah'
+      - 'geovannycordero'
     commit-message:
       prefix: 'chore'
       prefix-development: 'chore'
@@ -57,9 +57,9 @@ updates:
       timezone: 'America/Costa_Rica'
     open-pull-requests-limit: 5
     reviewers:
-      - 'gehovah'
+      - 'geovannycordero'
     assignees:
-      - 'gehovah'
+      - 'geovannycordero'
     commit-message:
       prefix: 'chore'
       prefix-development: 'chore'
@@ -78,9 +78,9 @@ updates:
       timezone: 'America/Costa_Rica'
     open-pull-requests-limit: 5
     reviewers:
-      - 'gehovah'
+      - 'geovannycordero'
     assignees:
-      - 'gehovah'
+      - 'geovannycordero'
     commit-message:
       prefix: 'ci'
       include: 'scope'
