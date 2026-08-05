@@ -45,6 +45,7 @@ export const medicationSchema = baseActionSchema.extend({
 export const foodSchema = baseActionSchema.extend({
   type: z.literal(ActionTypeEnum.FOOD),
   foodDescription: z.string().min(1),
+  foodCarbs: z.number().multipleOf(0.5).min(0.5).max(10).optional().nullable(),
 });
 
 export const exerciseSchema = baseActionSchema.extend({
@@ -110,6 +111,7 @@ export const updateActionSchema = z.object({
   medicationName: z.string().min(1).optional(),
   medicationDose: z.string().min(1).optional(),
   foodDescription: z.string().min(1).optional(),
+  foodCarbs: z.number().multipleOf(0.5).min(0.5).max(10).optional().nullable(),
   exerciseType: z.string().min(1).optional(),
   exerciseDuration: z.number().int().positive().optional(),
   exerciseIntensity: z.string().min(1).optional(),

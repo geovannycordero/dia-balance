@@ -39,6 +39,7 @@ type FormState = {
   medicationName?: string;
   medicationDose?: string;
   foodDescription?: string;
+  foodCarbs?: string;
   exerciseType?: string;
   exerciseDuration?: string;
   exerciseIntensity?: string;
@@ -196,6 +197,7 @@ export function DashboardClient({
         break;
       case ActionType.FOOD:
         formState.foodDescription = action.foodDescription ?? '';
+        formState.foodCarbs = action.foodCarbs != null ? String(action.foodCarbs) : '';
         break;
       case ActionType.EXERCISE:
         formState.exerciseType = action.exerciseType ?? '';
@@ -288,6 +290,7 @@ export function DashboardClient({
           ...base,
           type: ActionType.FOOD,
           foodDescription: form.foodDescription || '',
+          foodCarbs: form.foodCarbs ? Number(form.foodCarbs) : null,
         };
       case ActionType.EXERCISE:
         return {
@@ -694,7 +697,9 @@ function formatActionTitle(action: Action) {
     case ActionType.MEDICATION:
       return action.medicationName ?? 'Medication';
     case ActionType.FOOD:
-      return action.foodDescription ?? 'Food';
+      return action.foodCarbs
+        ? `${action.foodDescription ?? 'Food'} — ${action.foodCarbs} carbs`
+        : (action.foodDescription ?? 'Food');
     case ActionType.EXERCISE:
       return action.exerciseType ?? 'Exercise';
     case ActionType.SLEEP:
@@ -876,20 +881,41 @@ function renderTypeSpecificFields(
           </div>
         </div>
       );
-    case ActionType.FOOD:
+    case ActionType.FOOD: {
+      const carbOptions = Array.from({ length: 20 }, (_, i) => (i + 1) * 0.5); // 0.5..10
       return (
-        <div>
-          <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
-            Description
-          </label>
-          <input
-            type="text"
-            className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-2 py-2 text-sm text-slate-900 outline-none ring-sky-500/60 focus:border-sky-500 focus:ring-2 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-            value={form.foodDescription ?? ''}
-            onChange={(e) => updateField('foodDescription', e.target.value)}
-          />
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
+              Description
+            </label>
+            <input
+              type="text"
+              className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-2 py-2 text-sm text-slate-900 outline-none ring-sky-500/60 focus:border-sky-500 focus:ring-2 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+              value={form.foodDescription ?? ''}
+              onChange={(e) => updateField('foodDescription', e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
+              Approx. Carbs
+            </label>
+            <select
+              className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-2 py-2 text-sm text-slate-900 outline-none ring-sky-500/60 focus:border-sky-500 focus:ring-2 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+              value={form.foodCarbs ?? ''}
+              onChange={(e) => updateField('foodCarbs', e.target.value)}
+            >
+              <option value="">Select</option>
+              {carbOptions.map((v) => (
+                <option key={v} value={v}>
+                  {v}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       );
+    }
     case ActionType.EXERCISE:
       return (
         <div className="grid grid-cols-3 gap-3">

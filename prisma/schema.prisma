@@ -59,6 +59,7 @@ model Action {
   medicationDose String?
 
   foodDescription String?
+  foodCarbs       Float?
 
   exerciseType      String?
   exerciseDuration  Int?
