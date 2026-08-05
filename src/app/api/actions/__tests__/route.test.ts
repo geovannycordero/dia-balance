@@ -289,6 +289,7 @@ describe('/api/actions', () => {
           medicationName: undefined,
           medicationDose: undefined,
           foodDescription: undefined,
+          foodCarbs: undefined,
           exerciseType: undefined,
           exerciseDuration: undefined,
           exerciseIntensity: undefined,
@@ -348,6 +349,7 @@ describe('/api/actions', () => {
           medicationName: undefined,
           medicationDose: undefined,
           foodDescription: undefined,
+          foodCarbs: undefined,
           exerciseType: undefined,
           exerciseDuration: undefined,
           exerciseIntensity: undefined,
@@ -517,6 +519,7 @@ describe('/api/actions', () => {
       const payload = {
         type: ActionType.FOOD,
         foodDescription: 'Grilled chicken with vegetables',
+        foodCarbs: 2.5,
         notes: 'Lunch',
       };
 
@@ -541,6 +544,60 @@ describe('/api/actions', () => {
       expect(data.id).toBe(createdAction.id);
       expect(data.type).toBe(createdAction.type);
       expect(data.foodDescription).toBe(createdAction.foodDescription);
+      expect(data.foodCarbs).toBe(createdAction.foodCarbs);
+    });
+
+    it('should create food action without foodCarbs (optional field)', async () => {
+      const payload = {
+        type: ActionType.FOOD,
+        foodDescription: 'Grilled chicken with vegetables',
+        notes: 'Lunch',
+      };
+
+      const createdAction = {
+        id: 'action-food-no-carbs',
+        userId: mockUserId,
+        ...payload,
+        foodCarbs: null,
+        timestamp: new Date(),
+      };
+
+      mockPrisma.action.create.mockResolvedValue(createdAction);
+
+      const request = new Request('http://localhost/api/actions', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+
+      const response = await POST(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(201);
+      expect(data.foodDescription).toBe(createdAction.foodDescription);
+      expect(data.foodCarbs).toBeNull();
+      expect(mockPrisma.action.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          foodDescription: payload.foodDescription,
+          foodCarbs: undefined,
+        }),
+      });
+    });
+
+    it('should reject food action with invalid foodCarbs (non-half-step)', async () => {
+      const request = new Request('http://localhost/api/actions', {
+        method: 'POST',
+        body: JSON.stringify({
+          type: ActionType.FOOD,
+          foodDescription: 'Snack',
+          foodCarbs: 1.3,
+        }),
+      });
+
+      const response = await POST(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(data.error).toBe('Invalid payload');
     });
 
     it('should create symptoms action', async () => {

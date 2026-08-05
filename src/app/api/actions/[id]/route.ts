@@ -63,6 +63,7 @@ export async function PATCH(req: Request, { params }: RouteParams) {
         'medicationDose' in data ? (data.medicationDose ?? null) : existing.medicationDose,
       foodDescription:
         'foodDescription' in data ? (data.foodDescription ?? null) : existing.foodDescription,
+      foodCarbs: 'foodCarbs' in data ? (data.foodCarbs ?? null) : existing.foodCarbs,
       exerciseType: 'exerciseType' in data ? (data.exerciseType ?? null) : existing.exerciseType,
       exerciseDuration:
         'exerciseDuration' in data ? (data.exerciseDuration ?? null) : existing.exerciseDuration,

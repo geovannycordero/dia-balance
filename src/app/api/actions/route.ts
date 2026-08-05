@@ -65,6 +65,7 @@ export async function POST(req: Request) {
       medicationName: 'medicationName' in data ? (data.medicationName ?? undefined) : undefined,
       medicationDose: 'medicationDose' in data ? (data.medicationDose ?? undefined) : undefined,
       foodDescription: 'foodDescription' in data ? (data.foodDescription ?? undefined) : undefined,
+      foodCarbs: 'foodCarbs' in data ? (data.foodCarbs ?? undefined) : undefined,
       exerciseType: 'exerciseType' in data ? (data.exerciseType ?? undefined) : undefined,
       exerciseDuration:
         'exerciseDuration' in data ? (data.exerciseDuration ?? undefined) : undefined,

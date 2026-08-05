@@ -297,12 +297,14 @@ describe('/api/actions/[id]', () => {
         type: ActionType.FOOD,
         timestamp: new Date('2024-01-01'),
         foodDescription: 'Grilled chicken',
+        foodCarbs: 3,
         notes: 'Original notes',
       };
 
       const updatedAction = {
         ...existingAction,
         foodDescription: 'Salad with dressing',
+        foodCarbs: 1.5,
         notes: 'Updated notes',
       };
 
@@ -313,6 +315,7 @@ describe('/api/actions/[id]', () => {
         method: 'PATCH',
         body: JSON.stringify({
           foodDescription: 'Salad with dressing',
+          foodCarbs: 1.5,
           notes: 'Updated notes',
         }),
       });
@@ -323,7 +326,47 @@ describe('/api/actions/[id]', () => {
 
       expect(response.status).toBe(200);
       expect(data.foodDescription).toBe('Salad with dressing');
+      expect(data.foodCarbs).toBe(1.5);
       expect(data.notes).toBe('Updated notes');
+      expect(mockPrisma.action.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ foodCarbs: 1.5 }),
+        })
+      );
+    });
+
+    it('should clear foodCarbs when explicitly set to null on update', async () => {
+      const existingAction = {
+        id: mockActionId,
+        userId: mockUserId,
+        type: ActionType.FOOD,
+        timestamp: new Date('2024-01-01'),
+        foodDescription: 'Grilled chicken',
+        foodCarbs: 3,
+        notes: 'Original notes',
+      };
+
+      const updatedAction = {
+        ...existingAction,
+        foodCarbs: null,
+      };
+
+      mockPrisma.action.findFirst.mockResolvedValue(existingAction);
+      mockPrisma.action.update.mockResolvedValue(updatedAction);
+
+      const request = new Request('http://localhost/api/actions/123', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          foodCarbs: null,
+        }),
+      });
+
+      const params = Promise.resolve({ id: mockActionId });
+      const response = await PATCH(request, { params });
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.foodCarbs).toBeNull();
     });
 
     it('should update symptoms action', async () => {
