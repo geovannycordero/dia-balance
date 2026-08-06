@@ -151,6 +151,15 @@ export async function GET(req: Request) {
       value: f.carbs,
     })),
   );
+  // Bucketed server-side (same as carbsByDay) rather than by the client, so the two
+  // day-keys always align even if the server and the user's browser are in different
+  // timezones.
+  const insulinByDay = summarizeDailyTotals(
+    insulin.map((i: { timestamp: Date; units: number }) => ({
+      timestamp: i.timestamp,
+      value: i.units,
+    })),
+  );
   const totalCarbsInPeriod = food.reduce((sum: number, f: { carbs: number }) => sum + f.carbs, 0);
 
   const bpGlucoseCorrelation = calculateBPCorrelation(bloodPressure, bloodGlucose);
@@ -193,6 +202,7 @@ export async function GET(req: Request) {
     hydrationByDay,
     weightTrend,
     carbsByDay,
+    insulinByDay,
     totalCarbsInPeriod,
     bpGlucoseCorrelation,
     insulinCarbPairs,

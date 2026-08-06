@@ -646,6 +646,7 @@ describe('/api/analytics', () => {
       expect(data.bpGlucoseCorrelation).toBeNull();
       expect(data.food).toEqual([]);
       expect(data.carbsByDay).toEqual([]);
+      expect(data.insulinByDay).toEqual([]);
       expect(data.totalCarbsInPeriod).toBe(0);
       expect(data.insulinCarbPairs).toEqual([]);
       expect(data.insulinCarbCorrelation).toBeNull();
@@ -1006,6 +1007,47 @@ describe('/api/analytics', () => {
 
         expect(response.status).toBe(200);
         expect(data.carbsByDay).toHaveLength(2);
+      });
+
+      it('should calculate insulin by day totals using the same day-bucketing as carbsByDay', async () => {
+        const mockActions = [
+          {
+            id: '1',
+            userId: mockUserId,
+            type: ActionType.INSULIN,
+            timestamp: new Date('2024-01-01T08:00:00Z'),
+            insulinUnits: 4,
+            insulinType: 'rapid-acting',
+          },
+          {
+            id: '2',
+            userId: mockUserId,
+            type: ActionType.INSULIN,
+            timestamp: new Date('2024-01-01T20:00:00Z'),
+            insulinUnits: 2,
+            insulinType: 'rapid-acting',
+          },
+          {
+            id: '3',
+            userId: mockUserId,
+            type: ActionType.FOOD,
+            timestamp: new Date('2024-01-01T08:05:00Z'),
+            foodCarbs: 3,
+            foodDescription: 'Breakfast',
+          },
+        ];
+
+        mockPrisma.action.findMany.mockResolvedValue(mockActions);
+
+        const request = new Request('http://localhost/api/analytics?from=2024-01-01&to=2024-01-01');
+        const response = await GET(request);
+        const data = await response.json();
+
+        expect(response.status).toBe(200);
+        expect(data.insulinByDay).toHaveLength(1);
+        expect(data.insulinByDay[0].total).toBe(6);
+        // Same day-bucketing function as carbsByDay, so the date keys line up exactly.
+        expect(data.insulinByDay[0].date).toBe(data.carbsByDay[0].date);
       });
 
       it('should sum total carbs across the whole selected period', async () => {

@@ -78,6 +78,7 @@ type AnalyticsResponse = {
   weightTrend: { timestamp: string; value: number; unit?: string | null }[];
   food: { timestamp: string; carbs: number; description?: string; notes?: string }[];
   carbsByDay: { date: string; total: number }[];
+  insulinByDay: { date: string; total: number }[];
   totalCarbsInPeriod: number;
   insulinCarbPairs: {
     timestamp: string;
@@ -272,6 +273,21 @@ export function AnalyticsClient({ userPreferences }: AnalyticsClientProps) {
       default: return '';
     }
   }, [preset, from, to]);
+
+  const insulinCarbScatterData = useMemo(
+    () => (data ? buildInsulinCarbScatterData(data.insulinCarbPairs) : []),
+    [data],
+  );
+  const carbsInsulinByDayData = useMemo(
+    () =>
+      data
+        ? buildCarbsInsulinSmallMultiplesData(data.carbsByDay, data.insulinByDay).map((d) => ({
+            ...d,
+            date: formatDateDDMMYYYY(d.date),
+          }))
+        : [],
+    [data],
+  );
 
   return (
     <>
@@ -507,7 +523,7 @@ export function AnalyticsClient({ userPreferences }: AnalyticsClientProps) {
                       Total carbs in this period: {data.totalCarbsInPeriod}
                     </p>
                     <ResponsiveContainer width="100%" height={200}>
-                      <ComposedChart data={buildInsulinCarbScatterData(data.insulinCarbPairs)}>
+                      <ComposedChart data={insulinCarbScatterData}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                         <XAxis
                           type="number"
@@ -524,10 +540,7 @@ export function AnalyticsClient({ userPreferences }: AnalyticsClientProps) {
                           label={{ value: 'Units', angle: -90, position: 'insideLeft' }}
                         />
                         <Tooltip cursor={{ strokeDasharray: '3 3' }} />
-                        <Scatter
-                          data={buildInsulinCarbScatterData(data.insulinCarbPairs)}
-                          fill="#38bdf8"
-                        />
+                        <Scatter data={insulinCarbScatterData} fill="#38bdf8" />
                       </ComposedChart>
                     </ResponsiveContainer>
                   </AnalyticsCard>
@@ -535,11 +548,7 @@ export function AnalyticsClient({ userPreferences }: AnalyticsClientProps) {
                   <AnalyticsCard title="Carbs & insulin over time">
                     <div className="flex flex-col gap-2">
                       <ResponsiveContainer width="100%" height={100}>
-                        <BarChart
-                          data={buildCarbsInsulinSmallMultiplesData(data.carbsByDay, data.insulin).map(
-                            (d) => ({ ...d, date: formatDateDDMMYYYY(d.date) }),
-                          )}
-                        >
+                        <BarChart data={carbsInsulinByDayData}>
                           <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                           <XAxis dataKey="date" tick={{ fontSize: 9 }} hide />
                           <YAxis tick={{ fontSize: 10 }} width={30} />
@@ -548,11 +557,7 @@ export function AnalyticsClient({ userPreferences }: AnalyticsClientProps) {
                         </BarChart>
                       </ResponsiveContainer>
                       <ResponsiveContainer width="100%" height={100}>
-                        <BarChart
-                          data={buildCarbsInsulinSmallMultiplesData(data.carbsByDay, data.insulin).map(
-                            (d) => ({ ...d, date: formatDateDDMMYYYY(d.date) }),
-                          )}
-                        >
+                        <BarChart data={carbsInsulinByDayData}>
                           <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                           <XAxis dataKey="date" tick={{ fontSize: 9 }} />
                           <YAxis tick={{ fontSize: 10 }} width={30} />
@@ -1253,9 +1258,13 @@ export function buildInsulinCarbScatterData(
 
 type CarbsInsulinByDayPoint = { date: string; carbs: number; insulinUnits: number };
 
+// Both inputs must already be bucketed by the same day-key convention (as
+// summarizeDailyTotals does server-side for both carbsByDay and insulinByDay) —
+// this function only unions the two by that key, it does not derive day
+// buckets itself, so it can never disagree with the server's timezone.
 export function buildCarbsInsulinSmallMultiplesData(
   carbsByDay: { date: string; total: number }[],
-  insulin: { timestamp: string; units: number }[],
+  insulinByDay: { date: string; total: number }[],
 ): CarbsInsulinByDayPoint[] {
   const byDay = new Map<string, CarbsInsulinByDayPoint>();
 
@@ -1263,13 +1272,12 @@ export function buildCarbsInsulinSmallMultiplesData(
     byDay.set(c.date, { date: c.date, carbs: c.total, insulinUnits: 0 });
   });
 
-  insulin.forEach((i) => {
-    const key = new Date(new Date(i.timestamp).setHours(0, 0, 0, 0)).toISOString();
-    const existing = byDay.get(key);
+  insulinByDay.forEach((i) => {
+    const existing = byDay.get(i.date);
     if (existing) {
-      existing.insulinUnits += i.units;
+      existing.insulinUnits = i.total;
     } else {
-      byDay.set(key, { date: key, carbs: 0, insulinUnits: i.units });
+      byDay.set(i.date, { date: i.date, carbs: 0, insulinUnits: i.total });
     }
   });
 
