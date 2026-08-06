@@ -76,6 +76,17 @@ type AnalyticsResponse = {
   }[];
   hydrationByDay: { date: string; total: number }[];
   weightTrend: { timestamp: string; value: number; unit?: string | null }[];
+  food: { timestamp: string; carbs: number; description?: string; notes?: string }[];
+  carbsByDay: { date: string; total: number }[];
+  totalCarbsInPeriod: number;
+  insulinCarbPairs: {
+    timestamp: string;
+    units: number;
+    carbs: number;
+    insulinType?: string;
+    foodDescription?: string;
+  }[];
+  insulinCarbCorrelation: { coefficient: number; strength: string; direction: string } | null;
   bpGlucoseCorrelation: { coefficient: number; strength: string; direction: string } | null;
   timeInRanges: { veryLow: ZoneStat; low: ZoneStat; target: ZoneStat; high: ZoneStat; veryHigh: ZoneStat } | null;
   glucoseStats: { averageGlucose: number; gmi: number; glucoseVariability: number; daysOfData: number } | null;
@@ -483,6 +494,111 @@ export function AnalyticsClient({ userPreferences }: AnalyticsClientProps) {
                           <Bar dataKey="hydration" name="Hydration (total)" fill="#22c55e" radius={[4, 4, 0, 0]} />
                         </BarChart>
                       </ResponsiveContainer>
+                    </AnalyticsCard>
+                  )}
+                </section>
+              )}
+
+              {/* ── Insulin vs Carbs ── */}
+              {userPreferences.enabledAnalytics.insulinVsCarbs && (
+                <section className="grid gap-4 md:grid-cols-2" data-testid="insulin-vs-carbs">
+                  <AnalyticsCard title="Insulin vs carbs">
+                    <p className="mb-2 text-xs text-slate-600 dark:text-slate-400">
+                      Total carbs in this period: {data.totalCarbsInPeriod}
+                    </p>
+                    <ResponsiveContainer width="100%" height={200}>
+                      <ComposedChart data={buildInsulinCarbScatterData(data.insulinCarbPairs)}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                        <XAxis
+                          type="number"
+                          dataKey="carbs"
+                          name="Carbs"
+                          tick={{ fontSize: 10 }}
+                          label={{ value: 'Carbs', position: 'insideBottom', offset: -2 }}
+                        />
+                        <YAxis
+                          type="number"
+                          dataKey="units"
+                          name="Insulin"
+                          tick={{ fontSize: 10 }}
+                          label={{ value: 'Units', angle: -90, position: 'insideLeft' }}
+                        />
+                        <Tooltip cursor={{ strokeDasharray: '3 3' }} />
+                        <Scatter
+                          data={buildInsulinCarbScatterData(data.insulinCarbPairs)}
+                          fill="#38bdf8"
+                        />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  </AnalyticsCard>
+
+                  <AnalyticsCard title="Carbs & insulin over time">
+                    <div className="flex flex-col gap-2">
+                      <ResponsiveContainer width="100%" height={100}>
+                        <BarChart
+                          data={buildCarbsInsulinSmallMultiplesData(data.carbsByDay, data.insulin).map(
+                            (d) => ({ ...d, date: formatDateDDMMYYYY(d.date) }),
+                          )}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                          <XAxis dataKey="date" tick={{ fontSize: 9 }} hide />
+                          <YAxis tick={{ fontSize: 10 }} width={30} />
+                          <Tooltip />
+                          <Bar dataKey="carbs" name="Carbs" fill="#22c55e" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                      <ResponsiveContainer width="100%" height={100}>
+                        <BarChart
+                          data={buildCarbsInsulinSmallMultiplesData(data.carbsByDay, data.insulin).map(
+                            (d) => ({ ...d, date: formatDateDDMMYYYY(d.date) }),
+                          )}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                          <XAxis dataKey="date" tick={{ fontSize: 9 }} />
+                          <YAxis tick={{ fontSize: 10 }} width={30} />
+                          <Tooltip />
+                          <Bar
+                            dataKey="insulinUnits"
+                            name="Insulin (units)"
+                            fill="#a855f7"
+                            radius={[4, 4, 0, 0]}
+                          />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </AnalyticsCard>
+
+                  {data.insulinCarbCorrelation && (
+                    <AnalyticsCard title="Insulin-carb correlation">
+                      <div className="flex h-[220px] flex-col justify-center gap-3">
+                        <div className="text-center">
+                          <p className="text-3xl font-bold text-slate-900 dark:text-slate-100">
+                            r = {data.insulinCarbCorrelation.coefficient.toFixed(2)}
+                          </p>
+                          <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
+                            Pearson correlation coefficient
+                          </p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                            {data.insulinCarbCorrelation.strength.charAt(0).toUpperCase() +
+                              data.insulinCarbCorrelation.strength.slice(1)}{' '}
+                            {data.insulinCarbCorrelation.direction} correlation
+                          </p>
+                          <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
+                            {data.insulinCarbCorrelation.direction === 'positive'
+                              ? 'Larger carb intake tends to coincide with larger insulin doses'
+                              : 'Larger carb intake tends to coincide with smaller insulin doses'}
+                          </p>
+                        </div>
+                        <div className="mt-2 rounded-lg bg-slate-100 p-3 dark:bg-slate-800">
+                          <p className="text-xs text-slate-600 dark:text-slate-400">
+                            <strong>Interpretation:</strong> Correlation strength is considered{' '}
+                            <strong>weak</strong> if |r| &lt; 0.4, <strong>moderate</strong> if
+                            0.4 ≤ |r| &lt; 0.7, and <strong>strong</strong> if |r| ≥ 0.7.
+                          </p>
+                        </div>
+                      </div>
                     </AnalyticsCard>
                   )}
                 </section>
@@ -1122,6 +1238,43 @@ function mergeSeriesForDualAxisBP(
 
   return Array.from(byTime.values()).sort(
     (a, b) => new Date(a.time).getTime() - new Date(b.time).getTime(),
+  );
+}
+
+export function buildInsulinCarbScatterData(
+  pairs: { timestamp: string; units: number; carbs: number }[],
+): { carbs: number; units: number; label: string }[] {
+  return pairs.map((p) => ({
+    carbs: p.carbs,
+    units: p.units,
+    label: formatDateTimeDDMMYYYY(p.timestamp),
+  }));
+}
+
+type CarbsInsulinByDayPoint = { date: string; carbs: number; insulinUnits: number };
+
+export function buildCarbsInsulinSmallMultiplesData(
+  carbsByDay: { date: string; total: number }[],
+  insulin: { timestamp: string; units: number }[],
+): CarbsInsulinByDayPoint[] {
+  const byDay = new Map<string, CarbsInsulinByDayPoint>();
+
+  carbsByDay.forEach((c) => {
+    byDay.set(c.date, { date: c.date, carbs: c.total, insulinUnits: 0 });
+  });
+
+  insulin.forEach((i) => {
+    const key = new Date(new Date(i.timestamp).setHours(0, 0, 0, 0)).toISOString();
+    const existing = byDay.get(key);
+    if (existing) {
+      existing.insulinUnits += i.units;
+    } else {
+      byDay.set(key, { date: key, carbs: 0, insulinUnits: i.units });
+    }
+  });
+
+  return Array.from(byDay.values()).sort(
+    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
   );
 }
 

@@ -32,6 +32,7 @@ const ANALYTICS_LABELS = {
   bloodGlucoseTrend: 'Blood Glucose Trend',
   dailyGlucoseSummary: 'Daily Glucose Summary',
   insulinVsGlucose: 'Insulin vs Glucose',
+  insulinVsCarbs: 'Insulin vs Carbs',
   exerciseHydration: 'Exercise Impact & Hydration',
   sleepGlucose: 'Sleep & Glucose Stability',
   weightTrend: 'Weight Trend',

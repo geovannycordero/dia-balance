@@ -81,6 +81,15 @@ async function main() {
       insulinUnits: 6,
     });
 
+    // Breakfast (within the 60-min insulin-carb match window)
+    actions.push({
+      userId: user.id,
+      type: 'FOOD',
+      timestamp: makeDate(day, 8, 0),
+      foodDescription: 'Breakfast',
+      foodCarbs: 6,
+    });
+
     // Sleep
     actions.push({
       userId: user.id,
