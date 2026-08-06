@@ -125,6 +125,15 @@ export async function GET(req: Request) {
       notes: a.notes ?? undefined,
     }));
 
+  const food = actions
+    .filter((a: Action) => a.type === ActionType.FOOD && a.foodCarbs !== null)
+    .map((a: Action) => ({
+      timestamp: a.timestamp,
+      carbs: a.foodCarbs as number,
+      description: a.foodDescription ?? undefined,
+      notes: a.notes ?? undefined,
+    }));
+
   const medication = actions.filter((a: Action) => a.type === ActionType.MEDICATION);
 
   const dailyGlucoseSummary = summarizeDailyGlucose(bloodGlucose);
@@ -136,8 +145,26 @@ export async function GET(req: Request) {
     })),
   );
   const weightTrend = summarizeWeight(weight);
+  const carbsByDay = summarizeDailyTotals(
+    food.map((f: { timestamp: Date; carbs: number }) => ({
+      timestamp: f.timestamp,
+      value: f.carbs,
+    })),
+  );
+  // Bucketed server-side (same as carbsByDay) rather than by the client, so the two
+  // day-keys always align even if the server and the user's browser are in different
+  // timezones.
+  const insulinByDay = summarizeDailyTotals(
+    insulin.map((i: { timestamp: Date; units: number }) => ({
+      timestamp: i.timestamp,
+      value: i.units,
+    })),
+  );
+  const totalCarbsInPeriod = food.reduce((sum: number, f: { carbs: number }) => sum + f.carbs, 0);
 
   const bpGlucoseCorrelation = calculateBPCorrelation(bloodPressure, bloodGlucose);
+  const insulinCarbPairs = matchInsulinToCarbs(insulin, food);
+  const insulinCarbCorrelation = calculateInsulinCarbCorrelation(insulinCarbPairs);
 
   const timeInRanges = computeTimeInRanges(bloodGlucose);
   const glucoseStats = computeGlucoseStats(bloodGlucose);
@@ -151,8 +178,10 @@ export async function GET(req: Request) {
     weight,
     hydration,
     bloodPressure,
+    food,
     medicationCount: medication.length,
     bpGlucoseCorrelation,
+    insulinCarbCorrelation,
   });
 
   return NextResponse.json({
@@ -167,11 +196,17 @@ export async function GET(req: Request) {
     weight,
     hydration,
     bloodPressure,
+    food,
     dailyGlucoseSummary,
     dailyBloodPressureSummary,
     hydrationByDay,
     weightTrend,
+    carbsByDay,
+    insulinByDay,
+    totalCarbsInPeriod,
     bpGlucoseCorrelation,
+    insulinCarbPairs,
+    insulinCarbCorrelation,
     timeInRanges,
     glucoseStats,
     agp,
@@ -383,6 +418,103 @@ function calculateBPCorrelation(
   };
 }
 
+const INSULIN_CARB_MATCH_WINDOW_MINUTES = 60;
+
+type InsulinCarbPair = {
+  timestamp: Date;
+  units: number;
+  carbs: number;
+  insulinType?: string;
+  foodDescription?: string;
+};
+
+function matchInsulinToCarbs(
+  insulinDoses: { timestamp: Date; units: number; insulinType?: string }[],
+  foodEntries: { timestamp: Date; carbs: number; description?: string }[],
+  windowMinutes: number = INSULIN_CARB_MATCH_WINDOW_MINUTES,
+): InsulinCarbPair[] {
+  const pairs: InsulinCarbPair[] = [];
+
+  insulinDoses.forEach((dose) => {
+    const doseTime = dose.timestamp.getTime();
+    // Anchor on the insulin dose and find its NEAREST food entry within the
+    // window (not the first one encountered) — a dose is the "response" to a
+    // meal, so the closest-in-time meal is the more meaningful match.
+    let nearest: { timestamp: Date; carbs: number; description?: string } | null = null;
+    let nearestDiff = Infinity;
+
+    foodEntries.forEach((f) => {
+      const diffMinutes = Math.abs(doseTime - f.timestamp.getTime()) / (1000 * 60);
+      if (diffMinutes <= windowMinutes && diffMinutes < nearestDiff) {
+        nearest = f;
+        nearestDiff = diffMinutes;
+      }
+    });
+
+    if (nearest) {
+      const matchedFood: { timestamp: Date; carbs: number; description?: string } = nearest;
+      pairs.push({
+        timestamp: dose.timestamp,
+        units: dose.units,
+        carbs: matchedFood.carbs,
+        insulinType: dose.insulinType,
+        foodDescription: matchedFood.description,
+      });
+    }
+  });
+
+  return pairs;
+}
+
+function calculateInsulinCarbCorrelation(
+  pairs: { units: number; carbs: number }[],
+): { coefficient: number; strength: string; direction: string } | null {
+  if (pairs.length < 3) {
+    // Need at least 3 pairs for meaningful correlation
+    return null;
+  }
+
+  const n = pairs.length;
+  const unitsValues = pairs.map((p) => p.units);
+  const carbsValues = pairs.map((p) => p.carbs);
+
+  const unitsMean = unitsValues.reduce((sum, val) => sum + val, 0) / n;
+  const carbsMean = carbsValues.reduce((sum, val) => sum + val, 0) / n;
+
+  let numerator = 0;
+  let unitsVariance = 0;
+  let carbsVariance = 0;
+
+  for (let i = 0; i < n; i++) {
+    const unitsDiff = unitsValues[i] - unitsMean;
+    const carbsDiff = carbsValues[i] - carbsMean;
+    numerator += unitsDiff * carbsDiff;
+    unitsVariance += unitsDiff * unitsDiff;
+    carbsVariance += carbsDiff * carbsDiff;
+  }
+
+  const denominator = Math.sqrt(unitsVariance * carbsVariance);
+  const coefficient = denominator === 0 ? 0 : numerator / denominator;
+
+  const absCoeff = Math.abs(coefficient);
+  let strength: string;
+  if (absCoeff >= 0.7) {
+    strength = 'strong';
+  } else if (absCoeff >= 0.4) {
+    strength = 'moderate';
+  } else {
+    strength = 'weak';
+  }
+
+  const direction = coefficient >= 0 ? 'positive' : 'negative';
+
+  return {
+    coefficient: Math.round(coefficient * 100) / 100,
+    strength,
+    direction,
+  };
+}
+
 type ZoneStat = { pct: number; timeMinutes: number };
 
 function computeTimeInRanges(readings: { value: number }[]): {
@@ -536,8 +668,10 @@ type InsightContext = {
   weight: { timestamp: Date; value: number; unit?: string | null }[];
   hydration: { timestamp: Date; amount: number }[];
   bloodPressure: { timestamp: Date; systolic: number; diastolic: number; category: string }[];
+  food: { timestamp: Date; carbs: number; description?: string }[];
   medicationCount: number;
   bpGlucoseCorrelation: { coefficient: number; strength: string; direction: string } | null;
+  insulinCarbCorrelation: { coefficient: number; strength: string; direction: string } | null;
 };
 
 function buildInsights(ctx: InsightContext) {
@@ -636,6 +770,20 @@ function buildInsights(ctx: InsightContext) {
           : 'Higher blood glucose tends to coincide with lower blood pressure';
       insights.push(
         `${strength.charAt(0).toUpperCase() + strength.slice(1)} ${direction} correlation (r=${coefficient.toFixed(2)}): ${interpretation}.`,
+      );
+    }
+  }
+
+  if (ctx.insulinCarbCorrelation) {
+    const { coefficient, strength, direction } = ctx.insulinCarbCorrelation;
+    const absCoeff = Math.abs(coefficient);
+    if (absCoeff >= 0.4) {
+      const interpretation =
+        direction === 'positive'
+          ? 'Larger carb intake tends to coincide with larger insulin doses'
+          : 'Larger carb intake tends to coincide with smaller insulin doses';
+      insights.push(
+        `${strength.charAt(0).toUpperCase() + strength.slice(1)} ${direction} correlation between insulin and carbs (r=${coefficient.toFixed(2)}): ${interpretation}.`,
       );
     }
   }

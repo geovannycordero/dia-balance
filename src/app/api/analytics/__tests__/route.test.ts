@@ -644,6 +644,12 @@ describe('/api/analytics', () => {
       expect(data.hydrationByDay).toEqual([]);
       expect(data.weightTrend).toEqual([]);
       expect(data.bpGlucoseCorrelation).toBeNull();
+      expect(data.food).toEqual([]);
+      expect(data.carbsByDay).toEqual([]);
+      expect(data.insulinByDay).toEqual([]);
+      expect(data.totalCarbsInPeriod).toBe(0);
+      expect(data.insulinCarbPairs).toEqual([]);
+      expect(data.insulinCarbCorrelation).toBeNull();
       expect(Array.isArray(data.insights)).toBe(true);
     });
 
@@ -881,6 +887,524 @@ describe('/api/analytics', () => {
       // Should have insight about weight change
       const weightInsight = data.insights.find((insight: string) => insight.includes('weight'));
       expect(weightInsight).toBeDefined();
+    });
+
+    describe('insulin vs carbs', () => {
+      it('should return analytics data with food entries', async () => {
+        const mockActions = [
+          {
+            id: '1',
+            userId: mockUserId,
+            type: ActionType.FOOD,
+            timestamp: new Date('2024-01-01T10:00:00Z'),
+            foodCarbs: 4.5,
+            foodDescription: 'Sandwich',
+          },
+        ];
+
+        mockPrisma.action.findMany.mockResolvedValue(mockActions);
+
+        const request = new Request('http://localhost/api/analytics?from=2024-01-01&to=2024-01-01');
+        const response = await GET(request);
+        const data = await response.json();
+
+        expect(response.status).toBe(200);
+        expect(data.food).toHaveLength(1);
+        expect(data.food[0]).toEqual({
+          timestamp: mockActions[0].timestamp.toISOString(),
+          carbs: 4.5,
+          description: 'Sandwich',
+        });
+      });
+
+      it('should exclude food entries with null carbs', async () => {
+        const mockActions = [
+          {
+            id: '1',
+            userId: mockUserId,
+            type: ActionType.FOOD,
+            timestamp: new Date('2024-01-01T10:00:00Z'),
+            foodCarbs: null,
+            foodDescription: 'Just water',
+          },
+          {
+            id: '2',
+            userId: mockUserId,
+            type: ActionType.FOOD,
+            timestamp: new Date('2024-01-01T12:00:00Z'),
+            foodCarbs: 4,
+            foodDescription: 'Snack',
+          },
+        ];
+
+        mockPrisma.action.findMany.mockResolvedValue(mockActions);
+
+        const request = new Request('http://localhost/api/analytics?from=2024-01-01&to=2024-01-01');
+        const response = await GET(request);
+        const data = await response.json();
+
+        expect(response.status).toBe(200);
+        expect(data.food).toHaveLength(1);
+        expect(data.food[0].carbs).toBe(4);
+      });
+
+      it('should calculate carbs by day totals across multiple entries same day', async () => {
+        const mockActions = [
+          {
+            id: '1',
+            userId: mockUserId,
+            type: ActionType.FOOD,
+            timestamp: new Date('2024-01-01T08:00:00Z'),
+            foodCarbs: 2,
+            foodDescription: 'Breakfast',
+          },
+          {
+            id: '2',
+            userId: mockUserId,
+            type: ActionType.FOOD,
+            timestamp: new Date('2024-01-01T13:00:00Z'),
+            foodCarbs: 3,
+            foodDescription: 'Lunch',
+          },
+        ];
+
+        mockPrisma.action.findMany.mockResolvedValue(mockActions);
+
+        const request = new Request('http://localhost/api/analytics?from=2024-01-01&to=2024-01-01');
+        const response = await GET(request);
+        const data = await response.json();
+
+        expect(response.status).toBe(200);
+        expect(data.carbsByDay).toHaveLength(1);
+        expect(data.carbsByDay[0].total).toBe(5);
+      });
+
+      it('should bucket carbs by day into separate days', async () => {
+        const mockActions = [
+          {
+            id: '1',
+            userId: mockUserId,
+            type: ActionType.FOOD,
+            timestamp: new Date('2024-01-01T08:00:00Z'),
+            foodCarbs: 2,
+            foodDescription: 'Day 1',
+          },
+          {
+            id: '2',
+            userId: mockUserId,
+            type: ActionType.FOOD,
+            timestamp: new Date('2024-01-05T08:00:00Z'),
+            foodCarbs: 3,
+            foodDescription: 'Day 5',
+          },
+        ];
+
+        mockPrisma.action.findMany.mockResolvedValue(mockActions);
+
+        const request = new Request('http://localhost/api/analytics?from=2024-01-01&to=2024-01-07');
+        const response = await GET(request);
+        const data = await response.json();
+
+        expect(response.status).toBe(200);
+        expect(data.carbsByDay).toHaveLength(2);
+      });
+
+      it('should calculate insulin by day totals using the same day-bucketing as carbsByDay', async () => {
+        const mockActions = [
+          {
+            id: '1',
+            userId: mockUserId,
+            type: ActionType.INSULIN,
+            timestamp: new Date('2024-01-01T08:00:00Z'),
+            insulinUnits: 4,
+            insulinType: 'rapid-acting',
+          },
+          {
+            id: '2',
+            userId: mockUserId,
+            type: ActionType.INSULIN,
+            timestamp: new Date('2024-01-01T20:00:00Z'),
+            insulinUnits: 2,
+            insulinType: 'rapid-acting',
+          },
+          {
+            id: '3',
+            userId: mockUserId,
+            type: ActionType.FOOD,
+            timestamp: new Date('2024-01-01T08:05:00Z'),
+            foodCarbs: 3,
+            foodDescription: 'Breakfast',
+          },
+        ];
+
+        mockPrisma.action.findMany.mockResolvedValue(mockActions);
+
+        const request = new Request('http://localhost/api/analytics?from=2024-01-01&to=2024-01-01');
+        const response = await GET(request);
+        const data = await response.json();
+
+        expect(response.status).toBe(200);
+        expect(data.insulinByDay).toHaveLength(1);
+        expect(data.insulinByDay[0].total).toBe(6);
+        // Same day-bucketing function as carbsByDay, so the date keys line up exactly.
+        expect(data.insulinByDay[0].date).toBe(data.carbsByDay[0].date);
+      });
+
+      it('should sum total carbs across the whole selected period', async () => {
+        const mockActions = [
+          {
+            id: '1',
+            userId: mockUserId,
+            type: ActionType.FOOD,
+            timestamp: new Date('2024-01-01T08:00:00Z'),
+            foodCarbs: 2,
+            foodDescription: 'Day 1',
+          },
+          {
+            id: '2',
+            userId: mockUserId,
+            type: ActionType.FOOD,
+            timestamp: new Date('2024-01-03T08:00:00Z'),
+            foodCarbs: 4.5,
+            foodDescription: 'Day 3',
+          },
+          {
+            id: '3',
+            userId: mockUserId,
+            type: ActionType.FOOD,
+            timestamp: new Date('2024-01-05T08:00:00Z'),
+            foodCarbs: 3,
+            foodDescription: 'Day 5',
+          },
+        ];
+
+        mockPrisma.action.findMany.mockResolvedValue(mockActions);
+
+        const request = new Request('http://localhost/api/analytics?from=2024-01-01&to=2024-01-07');
+        const response = await GET(request);
+        const data = await response.json();
+
+        expect(response.status).toBe(200);
+        expect(data.totalCarbsInPeriod).toBe(9.5);
+      });
+
+      it('should return zero total carbs when no food entries exist', async () => {
+        mockPrisma.action.findMany.mockResolvedValue([]);
+
+        const request = new Request('http://localhost/api/analytics?from=2024-01-01&to=2024-01-07');
+        const response = await GET(request);
+        const data = await response.json();
+
+        expect(response.status).toBe(200);
+        expect(data.totalCarbsInPeriod).toBe(0);
+      });
+
+      it('should match a single insulin dose to a nearby food entry within the match window', async () => {
+        const mockActions = [
+          {
+            id: '1',
+            userId: mockUserId,
+            type: ActionType.INSULIN,
+            timestamp: new Date('2024-01-01T12:00:00Z'),
+            insulinUnits: 6,
+            insulinType: 'rapid-acting',
+          },
+          {
+            id: '2',
+            userId: mockUserId,
+            type: ActionType.FOOD,
+            timestamp: new Date('2024-01-01T12:20:00Z'),
+            foodCarbs: 4,
+            foodDescription: 'Lunch',
+          },
+        ];
+
+        mockPrisma.action.findMany.mockResolvedValue(mockActions);
+
+        const request = new Request('http://localhost/api/analytics?from=2024-01-01&to=2024-01-01');
+        const response = await GET(request);
+        const data = await response.json();
+
+        expect(response.status).toBe(200);
+        expect(data.insulinCarbPairs).toHaveLength(1);
+        expect(data.insulinCarbPairs[0]).toEqual({
+          timestamp: mockActions[0].timestamp.toISOString(),
+          units: 6,
+          carbs: 4,
+          insulinType: 'rapid-acting',
+          foodDescription: 'Lunch',
+        });
+      });
+
+      it('should not match insulin and food entries more than 60 minutes apart', async () => {
+        const mockActions = [
+          {
+            id: '1',
+            userId: mockUserId,
+            type: ActionType.INSULIN,
+            timestamp: new Date('2024-01-01T12:00:00Z'),
+            insulinUnits: 6,
+            insulinType: 'rapid-acting',
+          },
+          {
+            id: '2',
+            userId: mockUserId,
+            type: ActionType.FOOD,
+            timestamp: new Date('2024-01-01T13:30:00Z'),
+            foodCarbs: 4,
+            foodDescription: 'Later snack',
+          },
+        ];
+
+        mockPrisma.action.findMany.mockResolvedValue(mockActions);
+
+        const request = new Request('http://localhost/api/analytics?from=2024-01-01&to=2024-01-01');
+        const response = await GET(request);
+        const data = await response.json();
+
+        expect(response.status).toBe(200);
+        expect(data.insulinCarbPairs).toEqual([]);
+      });
+
+      it('should match the nearest food entry when multiple are in range', async () => {
+        const mockActions = [
+          {
+            id: '1',
+            userId: mockUserId,
+            type: ActionType.FOOD,
+            timestamp: new Date('2024-01-01T11:10:00Z'),
+            foodCarbs: 2,
+            foodDescription: 'Far snack',
+          },
+          {
+            id: '2',
+            userId: mockUserId,
+            type: ActionType.INSULIN,
+            timestamp: new Date('2024-01-01T12:00:00Z'),
+            insulinUnits: 6,
+            insulinType: 'rapid-acting',
+          },
+          {
+            id: '3',
+            userId: mockUserId,
+            type: ActionType.FOOD,
+            timestamp: new Date('2024-01-01T12:10:00Z'),
+            foodCarbs: 5,
+            foodDescription: 'Close meal',
+          },
+        ];
+
+        mockPrisma.action.findMany.mockResolvedValue(mockActions);
+
+        const request = new Request('http://localhost/api/analytics?from=2024-01-01&to=2024-01-01');
+        const response = await GET(request);
+        const data = await response.json();
+
+        expect(response.status).toBe(200);
+        expect(data.insulinCarbPairs).toHaveLength(1);
+        expect(data.insulinCarbPairs[0].carbs).toBe(5);
+      });
+
+      it('should produce one matched pair per insulin dose when multiple doses match the same meal', async () => {
+        const mockActions = [
+          {
+            id: '1',
+            userId: mockUserId,
+            type: ActionType.INSULIN,
+            timestamp: new Date('2024-01-01T12:00:00Z'),
+            insulinUnits: 4,
+            insulinType: 'rapid-acting',
+          },
+          {
+            id: '2',
+            userId: mockUserId,
+            type: ActionType.INSULIN,
+            timestamp: new Date('2024-01-01T12:30:00Z'),
+            insulinUnits: 2,
+            insulinType: 'correction',
+          },
+          {
+            id: '3',
+            userId: mockUserId,
+            type: ActionType.FOOD,
+            timestamp: new Date('2024-01-01T12:05:00Z'),
+            foodCarbs: 6,
+            foodDescription: 'Lunch',
+          },
+        ];
+
+        mockPrisma.action.findMany.mockResolvedValue(mockActions);
+
+        const request = new Request('http://localhost/api/analytics?from=2024-01-01&to=2024-01-01');
+        const response = await GET(request);
+        const data = await response.json();
+
+        expect(response.status).toBe(200);
+        expect(data.insulinCarbPairs).toHaveLength(2);
+        expect(data.insulinCarbPairs.every((p: { carbs: number }) => p.carbs === 6)).toBe(true);
+      });
+
+      it('should return null insulinCarbCorrelation when fewer than 3 matched pairs', async () => {
+        const mockActions = [
+          {
+            id: '1',
+            userId: mockUserId,
+            type: ActionType.INSULIN,
+            timestamp: new Date('2024-01-01T12:00:00Z'),
+            insulinUnits: 4,
+            insulinType: 'rapid-acting',
+          },
+          {
+            id: '2',
+            userId: mockUserId,
+            type: ActionType.FOOD,
+            timestamp: new Date('2024-01-01T12:05:00Z'),
+            foodCarbs: 6,
+            foodDescription: 'Lunch',
+          },
+        ];
+
+        mockPrisma.action.findMany.mockResolvedValue(mockActions);
+
+        const request = new Request('http://localhost/api/analytics?from=2024-01-01&to=2024-01-01');
+        const response = await GET(request);
+        const data = await response.json();
+
+        expect(response.status).toBe(200);
+        expect(data.insulinCarbPairs).toHaveLength(1);
+        expect(data.insulinCarbCorrelation).toBeNull();
+      });
+
+      it('should calculate insulinCarbCorrelation when 3 or more matched pairs exist', async () => {
+        const mockActions = [
+          {
+            id: '1',
+            userId: mockUserId,
+            type: ActionType.INSULIN,
+            timestamp: new Date('2024-01-01T08:00:00Z'),
+            insulinUnits: 2,
+            insulinType: 'rapid-acting',
+          },
+          {
+            id: '2',
+            userId: mockUserId,
+            type: ActionType.FOOD,
+            timestamp: new Date('2024-01-01T08:05:00Z'),
+            foodCarbs: 2,
+            foodDescription: 'Breakfast',
+          },
+          {
+            id: '3',
+            userId: mockUserId,
+            type: ActionType.INSULIN,
+            timestamp: new Date('2024-01-02T13:00:00Z'),
+            insulinUnits: 5,
+            insulinType: 'rapid-acting',
+          },
+          {
+            id: '4',
+            userId: mockUserId,
+            type: ActionType.FOOD,
+            timestamp: new Date('2024-01-02T13:05:00Z'),
+            foodCarbs: 5,
+            foodDescription: 'Lunch',
+          },
+          {
+            id: '5',
+            userId: mockUserId,
+            type: ActionType.INSULIN,
+            timestamp: new Date('2024-01-03T19:00:00Z'),
+            insulinUnits: 8,
+            insulinType: 'rapid-acting',
+          },
+          {
+            id: '6',
+            userId: mockUserId,
+            type: ActionType.FOOD,
+            timestamp: new Date('2024-01-03T19:05:00Z'),
+            foodCarbs: 8,
+            foodDescription: 'Dinner',
+          },
+        ];
+
+        mockPrisma.action.findMany.mockResolvedValue(mockActions);
+
+        const request = new Request('http://localhost/api/analytics?from=2024-01-01&to=2024-01-07');
+        const response = await GET(request);
+        const data = await response.json();
+
+        expect(response.status).toBe(200);
+        expect(data.insulinCarbPairs).toHaveLength(3);
+        expect(data.insulinCarbCorrelation).not.toBeNull();
+        expect(data.insulinCarbCorrelation.coefficient).toBeDefined();
+        expect(data.insulinCarbCorrelation.strength).toBeDefined();
+        expect(data.insulinCarbCorrelation.direction).toBeDefined();
+      });
+
+      it('should include an insulin-carb correlation insight when the correlation is moderate or strong', async () => {
+        const mockActions = [
+          {
+            id: '1',
+            userId: mockUserId,
+            type: ActionType.INSULIN,
+            timestamp: new Date('2024-01-01T08:00:00Z'),
+            insulinUnits: 2,
+            insulinType: 'rapid-acting',
+          },
+          {
+            id: '2',
+            userId: mockUserId,
+            type: ActionType.FOOD,
+            timestamp: new Date('2024-01-01T08:05:00Z'),
+            foodCarbs: 2,
+            foodDescription: 'Breakfast',
+          },
+          {
+            id: '3',
+            userId: mockUserId,
+            type: ActionType.INSULIN,
+            timestamp: new Date('2024-01-02T13:00:00Z'),
+            insulinUnits: 5,
+            insulinType: 'rapid-acting',
+          },
+          {
+            id: '4',
+            userId: mockUserId,
+            type: ActionType.FOOD,
+            timestamp: new Date('2024-01-02T13:05:00Z'),
+            foodCarbs: 5,
+            foodDescription: 'Lunch',
+          },
+          {
+            id: '5',
+            userId: mockUserId,
+            type: ActionType.INSULIN,
+            timestamp: new Date('2024-01-03T19:00:00Z'),
+            insulinUnits: 8,
+            insulinType: 'rapid-acting',
+          },
+          {
+            id: '6',
+            userId: mockUserId,
+            type: ActionType.FOOD,
+            timestamp: new Date('2024-01-03T19:05:00Z'),
+            foodCarbs: 8,
+            foodDescription: 'Dinner',
+          },
+        ];
+
+        mockPrisma.action.findMany.mockResolvedValue(mockActions);
+
+        const request = new Request('http://localhost/api/analytics?from=2024-01-01&to=2024-01-07');
+        const response = await GET(request);
+        const data = await response.json();
+
+        expect(response.status).toBe(200);
+        const carbInsight = data.insights.find((insight: string) =>
+          /insulin.*carbs/i.test(insight),
+        );
+        expect(carbInsight).toBeDefined();
+      });
     });
 
     describe('notes field propagation', () => {

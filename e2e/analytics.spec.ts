@@ -63,6 +63,16 @@ test.describe('Analytics page', () => {
     await expect(page.getByText('Glucose Patterns')).toBeVisible();
   });
 
+  test('insulin vs carbs section is visible', async ({ page }) => {
+    await page.selectOption('select', '14d');
+    await page.locator('[data-testid="insulin-vs-carbs"]').waitFor({ timeout: 15_000 });
+
+    const section = page.locator('[data-testid="insulin-vs-carbs"]');
+    await expect(section.getByText('Insulin vs carbs')).toBeVisible();
+    await expect(section.getByText('Carbs & insulin over time')).toBeVisible();
+    await expect(section.getByText(/Total carbs in this period:/)).toBeVisible();
+  });
+
   test('date range preset changes data', async ({ page }) => {
     // Switch preset and confirm page updates (loading indicator appears then disappears)
     await page.selectOption('select', '30d');
