@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth/next';
 import { createActionSchema } from '@/lib/action-schemas';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { getViewUrl, isOwnedFoodImageKey } from '@/lib/r2';
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -23,7 +24,15 @@ export async function GET() {
     take: 200,
   });
 
-  return NextResponse.json(actions);
+  const withImageUrls = await Promise.all(
+    actions.map(async (action) =>
+      action.foodImageKey
+        ? { ...action, foodImageUrl: await getViewUrl(action.foodImageKey) }
+        : action,
+    ),
+  );
+
+  return NextResponse.json(withImageUrls);
 }
 
 export async function POST(req: Request) {
@@ -50,6 +59,10 @@ export async function POST(req: Request) {
 
   const data = parseResult.data;
 
+  if ('foodImageKey' in data && data.foodImageKey && !isOwnedFoodImageKey(data.foodImageKey, userId)) {
+    return NextResponse.json({ error: 'Invalid foodImageKey' }, { status: 400 });
+  }
+
   const timestamp = data.timestamp !== undefined ? new Date(data.timestamp) : new Date();
 
   const created = await prisma.action.create({
@@ -66,6 +79,7 @@ export async function POST(req: Request) {
       medicationDose: 'medicationDose' in data ? (data.medicationDose ?? undefined) : undefined,
       foodDescription: 'foodDescription' in data ? (data.foodDescription ?? undefined) : undefined,
       foodCarbs: 'foodCarbs' in data ? (data.foodCarbs ?? undefined) : undefined,
+      foodImageKey: 'foodImageKey' in data ? (data.foodImageKey ?? undefined) : undefined,
       exerciseType: 'exerciseType' in data ? (data.exerciseType ?? undefined) : undefined,
       exerciseDuration:
         'exerciseDuration' in data ? (data.exerciseDuration ?? undefined) : undefined,
@@ -85,5 +99,9 @@ export async function POST(req: Request) {
     },
   });
 
-  return NextResponse.json(created, { status: 201 });
+  const responseBody = created.foodImageKey
+    ? { ...created, foodImageUrl: await getViewUrl(created.foodImageKey) }
+    : created;
+
+  return NextResponse.json(responseBody, { status: 201 });
 }

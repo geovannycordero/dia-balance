@@ -4,6 +4,7 @@ import { GET, POST } from '../route';
 
 import { ActionType } from '@/app/constants/action-types';
 import { prisma } from '@/lib/prisma';
+import { getViewUrl, isOwnedFoodImageKey } from '@/lib/r2';
 
 jest.mock('next-auth/next', () => ({
   getServerSession: jest.fn(),
@@ -31,9 +32,18 @@ jest.mock('@/lib/prisma', () => ({
   },
 }));
 
+jest.mock('@/lib/r2', () => ({
+  getViewUrl: jest.fn(),
+  isOwnedFoodImageKey: jest.fn((key: string, userId: string) => key.startsWith(`food/${userId}/`)),
+}));
+
 const mockGetServerSession = getServerSession as jest.MockedFunction<typeof getServerSession>;
+const mockIsOwnedFoodImageKey = isOwnedFoodImageKey as jest.MockedFunction<
+  typeof isOwnedFoodImageKey
+>;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockPrisma = prisma as any;
+const mockGetViewUrl = getViewUrl as jest.MockedFunction<typeof getViewUrl>;
 
 describe('/api/actions', () => {
   const mockUserId = 'user-123';
@@ -48,6 +58,9 @@ describe('/api/actions', () => {
     jest.clearAllMocks();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mockGetServerSession.mockResolvedValue(mockSession as any);
+    mockGetViewUrl.mockImplementation((key: string) =>
+      Promise.resolve(`https://signed.example.com/${key}`),
+    );
   });
 
   describe('GET', () => {
@@ -213,6 +226,50 @@ describe('/api/actions', () => {
         orderBy: { timestamp: 'desc' },
         take: 200,
       });
+    });
+
+    it('attaches a signed foodImageUrl for actions with a foodImageKey', async () => {
+      const mockActions = [
+        {
+          id: 'action-food',
+          userId: mockUserId,
+          type: ActionType.FOOD,
+          timestamp: new Date('2024-01-01'),
+          foodDescription: 'Salad',
+          foodImageKey: 'food/user-123/abc.jpg',
+        },
+      ];
+
+      mockPrisma.action.findMany.mockResolvedValue(mockActions);
+
+      const response = await GET();
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(mockGetViewUrl).toHaveBeenCalledWith('food/user-123/abc.jpg');
+      expect(data[0].foodImageUrl).toBe('https://signed.example.com/food/user-123/abc.jpg');
+    });
+
+    it('does not attach foodImageUrl for actions without a foodImageKey', async () => {
+      const mockActions = [
+        {
+          id: 'action-food',
+          userId: mockUserId,
+          type: ActionType.FOOD,
+          timestamp: new Date('2024-01-01'),
+          foodDescription: 'Salad',
+          foodImageKey: null,
+        },
+      ];
+
+      mockPrisma.action.findMany.mockResolvedValue(mockActions);
+
+      const response = await GET();
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(mockGetViewUrl).not.toHaveBeenCalled();
+      expect(data[0].foodImageUrl).toBeUndefined();
     });
   });
 
@@ -581,6 +638,87 @@ describe('/api/actions', () => {
           foodCarbs: undefined,
         }),
       });
+    });
+
+    it('should create food action with a foodImageKey', async () => {
+      const payload = {
+        type: ActionType.FOOD,
+        foodDescription: 'Grilled chicken with vegetables',
+        foodImageKey: 'food/user-123/abc.jpg',
+      };
+
+      const createdAction = {
+        id: 'action-food-image',
+        userId: mockUserId,
+        ...payload,
+        timestamp: new Date(),
+      };
+
+      mockPrisma.action.create.mockResolvedValue(createdAction);
+
+      const request = new Request('http://localhost/api/actions', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+
+      const response = await POST(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(201);
+      expect(data.foodImageKey).toBe(payload.foodImageKey);
+      expect(mockPrisma.action.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ foodImageKey: payload.foodImageKey }),
+      });
+    });
+
+    it('should attach a signed foodImageUrl to the response when foodImageKey is set', async () => {
+      const payload = {
+        type: ActionType.FOOD,
+        foodDescription: 'Grilled chicken with vegetables',
+        foodImageKey: 'food/user-123/abc.jpg',
+      };
+
+      const createdAction = {
+        id: 'action-food-image',
+        userId: mockUserId,
+        ...payload,
+        timestamp: new Date(),
+      };
+
+      mockPrisma.action.create.mockResolvedValue(createdAction);
+
+      const request = new Request('http://localhost/api/actions', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+
+      const response = await POST(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(201);
+      expect(data.foodImageUrl).toBe('https://signed.example.com/food/user-123/abc.jpg');
+    });
+
+    it('should reject a foodImageKey not scoped to the authenticated user', async () => {
+      const request = new Request('http://localhost/api/actions', {
+        method: 'POST',
+        body: JSON.stringify({
+          type: ActionType.FOOD,
+          foodDescription: 'Grilled chicken with vegetables',
+          foodImageKey: 'food/some-other-user/abc.jpg',
+        }),
+      });
+
+      const response = await POST(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(data.error).toBe('Invalid foodImageKey');
+      expect(mockIsOwnedFoodImageKey).toHaveBeenCalledWith(
+        'food/some-other-user/abc.jpg',
+        mockUserId,
+      );
+      expect(mockPrisma.action.create).not.toHaveBeenCalled();
     });
 
     it('should reject food action with invalid foodCarbs (non-half-step)', async () => {

@@ -8,12 +8,15 @@
  * @param date - Date object or ISO string in UTC
  * @returns Formatted date string in dd/mm/YYYY format
  */
+const dateFormatter = new Intl.DateTimeFormat('en-GB', {
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+});
+
 export function formatDateDDMMYYYY(date: Date | string): string {
   const dateObj = typeof date === 'string' ? new Date(date) : date;
-  const day = String(dateObj.getDate()).padStart(2, '0');
-  const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-  const year = dateObj.getFullYear();
-  return `${day}/${month}/${year}`;
+  return dateFormatter.format(dateObj);
 }
 
 /**
@@ -21,14 +24,19 @@ export function formatDateDDMMYYYY(date: Date | string): string {
  * @param date - Date object or ISO string in UTC
  * @returns Formatted date string in dd/mm/YYYY HH:mm format
  */
+const dateTimeFormatter = new Intl.DateTimeFormat('en-GB', {
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+});
+
 export function formatDateTimeDDMMYYYY(date: Date | string): string {
   const dateObj = typeof date === 'string' ? new Date(date) : date;
-  const day = String(dateObj.getDate()).padStart(2, '0');
-  const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-  const year = dateObj.getFullYear();
-  const hours = String(dateObj.getHours()).padStart(2, '0');
-  const minutes = String(dateObj.getMinutes()).padStart(2, '0');
-  return `${day}/${month}/${year} ${hours}:${minutes}`;
+  // en-GB renders this as "dd/mm/yyyy, HH:mm" — normalize the comma+whitespace to a single space
+  return dateTimeFormatter.format(dateObj).replace(/,\s*/, ' ');
 }
 
 /**
@@ -94,30 +102,6 @@ export function utcToLocal(utcDate: Date | string): string {
   const minutes = String(date.getMinutes()).padStart(2, '0');
 
   return `${year}-${month}-${day}T${hours}:${minutes}`;
-}
-
-/**
- * Format a UTC date for display in user's local timezone
- * @param date - Date object or ISO string in UTC
- * @param options - Intl.DateTimeFormatOptions for formatting
- * @returns Formatted date string in user's local timezone
- */
-export function formatDateForDisplay(
-  date: Date | string,
-  options?: Intl.DateTimeFormatOptions,
-): string {
-  const dateObj = typeof date === 'string' ? new Date(date) : date;
-  return dateObj.toLocaleString(undefined, options);
-}
-
-/**
- * Format a UTC date as date-only string in user's local timezone
- * @param date - Date object or ISO string in UTC
- * @returns Date string in format based on user's locale
- */
-export function formatDateOnly(date: Date | string): string {
-  const dateObj = typeof date === 'string' ? new Date(date) : date;
-  return dateObj.toLocaleDateString();
 }
 
 /**

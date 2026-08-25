@@ -1,19 +1,8 @@
 import { z } from 'zod';
 
-import { ActionType as ActionTypeEnum } from '@/app/constants/action-types';
+import { ACTION_TYPE_VALUES, ActionType as ActionTypeEnum } from '@/app/constants/action-types';
 
-export const ActionTypeSchema = z.enum([
-  ActionTypeEnum.BLOOD_GLUCOSE,
-  ActionTypeEnum.INSULIN,
-  ActionTypeEnum.MEDICATION,
-  ActionTypeEnum.FOOD,
-  ActionTypeEnum.EXERCISE,
-  ActionTypeEnum.SLEEP,
-  ActionTypeEnum.SYMPTOMS,
-  ActionTypeEnum.WEIGHT,
-  ActionTypeEnum.HYDRATION,
-  ActionTypeEnum.BLOOD_PRESSURE,
-]);
+export const ActionTypeSchema = z.enum(ACTION_TYPE_VALUES);
 
 export type ActionType = z.infer<typeof ActionTypeSchema>;
 
@@ -46,6 +35,7 @@ export const foodSchema = baseActionSchema.extend({
   type: z.literal(ActionTypeEnum.FOOD),
   foodDescription: z.string().min(1),
   foodCarbs: z.number().multipleOf(0.5).min(0.5).max(10).optional().nullable(),
+  foodImageKey: z.string().optional(),
 });
 
 export const exerciseSchema = baseActionSchema.extend({
@@ -112,6 +102,7 @@ export const updateActionSchema = z.object({
   medicationDose: z.string().min(1).optional(),
   foodDescription: z.string().min(1).optional(),
   foodCarbs: z.number().multipleOf(0.5).min(0.5).max(10).optional().nullable(),
+  foodImageKey: z.string().nullable().optional(),
   exerciseType: z.string().min(1).optional(),
   exerciseDuration: z.number().int().positive().optional(),
   exerciseIntensity: z.string().min(1).optional(),
