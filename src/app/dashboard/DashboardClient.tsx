@@ -13,16 +13,20 @@ import {
   type ActionType as ActionTypeSchemaType,
   type CreateActionInput,
 } from '@/lib/action-schemas';
+import { getBloodPressureCategory } from '@/lib/blood-pressure';
 import {
   formatDateTimeDDMMYYYY,
   getCurrentLocalDateTime,
   localToUTC,
   utcToLocal,
 } from '@/lib/date-utils';
+import { compressImage } from '@/lib/image-compression';
 import { useOnlineStatus } from '@/lib/use-online-status';
 
+type ActionWithImage = Action & { foodImageUrl?: string };
+
 type DashboardClientProps = {
-  initialActions: Action[];
+  initialActions: ActionWithImage[];
   userName: string;
   userPreferences: UserPreferences;
 };
@@ -69,7 +73,7 @@ export function DashboardClient({
   userName,
   userPreferences,
 }: DashboardClientProps) {
-  const [actions, setActions] = useState<Action[]>(initialActions);
+  const [actions, setActions] = useState<ActionWithImage[]>(initialActions);
   const [isLogging, setIsLogging] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -77,6 +81,9 @@ export function DashboardClient({
   const [form, setForm] = useState<FormState>(defaultFormState(userPreferences.enabledActionTypes));
   const [editingActionId, setEditingActionId] = useState<string | null>(null);
   const [deletingActionId, setDeletingActionId] = useState<string | null>(null);
+  const [foodImageFile, setFoodImageFile] = useState<File | null>(null);
+  const [foodImagePreviewUrl, setFoodImagePreviewUrl] = useState<string | null>(null);
+  const [foodImageRemoved, setFoodImageRemoved] = useState(false);
   const isOnline = useOnlineStatus();
   const { addToast } = useToast();
 
@@ -136,7 +143,7 @@ export function DashboardClient({
           // Refresh actions from server
           const res = await fetch('/api/actions', { cache: 'no-store' });
           if (res.ok) {
-            const refreshed = (await res.json()) as Action[];
+            const refreshed = (await res.json()) as ActionWithImage[];
             setActions(refreshed);
             addToast(
               `Synced ${successful.length} queued action${successful.length > 1 ? 's' : ''}`,
@@ -172,7 +179,7 @@ export function DashboardClient({
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   }, [actions]);
 
-  const populateFormFromAction = (action: Action) => {
+  const populateFormFromAction = (action: ActionWithImage) => {
     // Convert UTC timestamp from database to local datetime-local format
     const localTimestamp = utcToLocal(action.timestamp);
 
@@ -228,27 +235,59 @@ export function DashboardClient({
     return formState;
   };
 
+  const resetFoodImageState = () => {
+    setFoodImageFile(null);
+    setFoodImagePreviewUrl(null);
+    setFoodImageRemoved(false);
+  };
+
   const handleOpenLogger = () => {
     setForm(defaultFormState(userPreferences.enabledActionTypes));
     setError(null);
     setEditingActionId(null);
+    resetFoodImageState();
     setIsLogging(true);
   };
 
-  const handleEditAction = (action: Action) => {
+  const handleEditAction = (action: ActionWithImage) => {
     setForm(populateFormFromAction(action));
     setError(null);
     setEditingActionId(action.id);
+    setFoodImageFile(null);
+    setFoodImageRemoved(false);
+    setFoodImagePreviewUrl(action.foodImageUrl ?? null);
     setIsLogging(true);
   };
 
   const handleCloseLogger = () => {
     setIsLogging(false);
     setEditingActionId(null);
+    resetFoodImageState();
   };
 
   const updateField = (field: keyof FormState, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleFoodImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
+    if (file.size > 8 * 1024 * 1024) {
+      addToast('Photo must be smaller than 8MB', 'error');
+      return;
+    }
+
+    setFoodImageFile(file);
+    setFoodImageRemoved(false);
+    setFoodImagePreviewUrl(URL.createObjectURL(file));
+  };
+
+  const handleRemoveFoodImage = () => {
+    setFoodImageFile(null);
+    setFoodImagePreviewUrl(null);
+    setFoodImageRemoved(true);
   };
 
   const buildPayload = (): CreateActionInput => {
@@ -349,7 +388,7 @@ export function DashboardClient({
       const payload = buildPayload();
 
       if (!isOnline) {
-        // Queue locally
+        // Queue locally (photo attachments require a connection, so are skipped when offline)
         const raw = typeof window === 'undefined' ? null : window.localStorage.getItem(PENDING_KEY);
         const queue: QueuedAction[] = raw ? JSON.parse(raw) : [];
         queue.push({ ...payload, queuedAt: new Date().toISOString() });
@@ -359,6 +398,37 @@ export function DashboardClient({
         return;
       }
 
+      let body: Record<string, unknown> = payload;
+
+      if (payload.type === ActionType.FOOD) {
+        if (foodImageFile) {
+          const { blob, contentType } = await compressImage(foodImageFile);
+          const uploadUrlRes = await fetch('/api/actions/upload-url', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contentType }),
+          });
+          if (!uploadUrlRes.ok) {
+            throw new Error('Failed to prepare photo upload');
+          }
+          const { uploadUrl, key } = (await uploadUrlRes.json()) as {
+            uploadUrl: string;
+            key: string;
+          };
+          const putRes = await fetch(uploadUrl, {
+            method: 'PUT',
+            headers: { 'Content-Type': contentType },
+            body: blob,
+          });
+          if (!putRes.ok) {
+            throw new Error('Failed to upload photo');
+          }
+          body = { ...payload, foodImageKey: key };
+        } else if (foodImageRemoved) {
+          body = { ...payload, foodImageKey: null };
+        }
+      }
+
       if (editingActionId) {
         // Update existing action
         const res = await fetch(`/api/actions/${editingActionId}`, {
@@ -366,18 +436,19 @@ export function DashboardClient({
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify(payload),
+          body: JSON.stringify(body),
         });
 
         if (!res.ok) {
-          const body = await res.json().catch(() => ({}));
-          throw new Error(body.error || 'Failed to update action');
+          const errorBody = await res.json().catch(() => ({}));
+          throw new Error(errorBody.error || 'Failed to update action');
         }
 
-        const updated = (await res.json()) as Action;
+        const updated = (await res.json()) as ActionWithImage;
         setActions((prev) => prev.map((a) => (a.id === editingActionId ? updated : a)));
         setIsLogging(false);
         setEditingActionId(null);
+        resetFoodImageState();
         addToast('Action updated successfully', 'success');
       } else {
         // Create new action
@@ -386,17 +457,18 @@ export function DashboardClient({
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify(payload),
+          body: JSON.stringify(body),
         });
 
         if (!res.ok) {
-          const body = await res.json().catch(() => ({}));
-          throw new Error(body.error || 'Failed to create action');
+          const errorBody = await res.json().catch(() => ({}));
+          throw new Error(errorBody.error || 'Failed to create action');
         }
 
-        const created = (await res.json()) as Action;
+        const created = (await res.json()) as ActionWithImage;
         setActions((prev) => [created, ...prev]);
         setIsLogging(false);
+        resetFoodImageState();
         addToast('Action saved successfully', 'success');
       }
     } catch (err) {
@@ -491,18 +563,29 @@ export function DashboardClient({
                 {sortedActions.map((action) => (
                   <li key={action.id} className="py-3 text-sm">
                     <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="font-medium text-slate-900 dark:text-slate-100">
-                          {formatActionTitle(action)}
-                        </p>
-                        <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-400">
-                          {formatActionDetails(action)}
-                        </p>
-                        {action.notes && (
-                          <p className="mt-1 text-xs text-slate-500 dark:text-slate-500">
-                            Notes: {action.notes}
-                          </p>
+                      <div className="flex items-start gap-3">
+                        {action.foodImageUrl && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={action.foodImageUrl}
+                            alt="Food"
+                            loading="lazy"
+                            className="h-12 w-12 shrink-0 rounded-lg object-cover"
+                          />
                         )}
+                        <div>
+                          <p className="font-medium text-slate-900 dark:text-slate-100">
+                            {formatActionTitle(action)}
+                          </p>
+                          <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-400">
+                            {formatActionDetails(action)}
+                          </p>
+                          {action.notes && (
+                            <p className="mt-1 text-xs text-slate-500 dark:text-slate-500">
+                              Notes: {action.notes}
+                            </p>
+                          )}
+                        </div>
                       </div>
                       <div className="flex flex-col items-end gap-1">
                         <p className="text-xs text-slate-500 dark:text-slate-500">
@@ -592,7 +675,11 @@ export function DashboardClient({
                     </div>
                   </div>
 
-                  {renderTypeSpecificFields(form, updateField)}
+                  {renderTypeSpecificFields(form, updateField, {
+                    previewUrl: foodImagePreviewUrl,
+                    onChange: handleFoodImageChange,
+                    onRemove: handleRemoveFoodImage,
+                  })}
 
                   <div>
                     <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
@@ -767,28 +854,14 @@ function formatActionDetails(action: Action) {
   }
 }
 
-function getBloodPressureCategory(
-  systolic: number,
-  diastolic: number,
-): 'normal' | 'elevated' | 'hypertension-stage-1' | 'hypertension-stage-2' | 'crisis' {
-  if (systolic > 180 || diastolic > 120) {
-    return 'crisis';
-  }
-  if (systolic >= 140 || diastolic >= 90) {
-    return 'hypertension-stage-2';
-  }
-  if (systolic >= 130 || diastolic >= 80) {
-    return 'hypertension-stage-1';
-  }
-  if (systolic >= 120) {
-    return 'elevated';
-  }
-  return 'normal';
-}
-
 function renderTypeSpecificFields(
   form: FormState,
   updateField: (field: keyof FormState, value: string) => void,
+  foodImage: {
+    previewUrl: string | null;
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    onRemove: () => void;
+  },
 ) {
   switch (form.type) {
     case ActionType.BLOOD_GLUCOSE:
@@ -912,6 +985,36 @@ function renderTypeSpecificFields(
                 </option>
               ))}
             </select>
+          </div>
+          <div className="col-span-2">
+            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
+              Photo (optional)
+            </label>
+            {foodImage.previewUrl ? (
+              <div className="mt-1 flex items-center gap-3">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={foodImage.previewUrl}
+                  alt="Food preview"
+                  className="h-16 w-16 rounded-lg object-cover"
+                />
+                <button
+                  type="button"
+                  onClick={foodImage.onRemove}
+                  className="text-xs text-rose-600 hover:text-rose-700 dark:text-rose-400 dark:hover:text-rose-300"
+                >
+                  Remove photo
+                </button>
+              </div>
+            ) : (
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                capture="environment"
+                onChange={foodImage.onChange}
+                className="mt-1 w-full text-xs text-slate-700 dark:text-slate-300"
+              />
+            )}
           </div>
         </div>
       );

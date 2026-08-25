@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { ActionType } from '@/app/constants/action-types';
+import { ACTION_TYPE_VALUES, ActionType } from '@/app/constants/action-types';
 
 export const EnabledAnalyticsSchema = z.object({
   glucoseOverview: z.boolean().default(true),
@@ -19,18 +19,7 @@ export const EnabledAnalyticsSchema = z.object({
   correlationAnalysis: z.boolean(),
 });
 
-const ActionTypeEnumSchema = z.enum([
-  ActionType.BLOOD_GLUCOSE,
-  ActionType.INSULIN,
-  ActionType.MEDICATION,
-  ActionType.FOOD,
-  ActionType.EXERCISE,
-  ActionType.SLEEP,
-  ActionType.SYMPTOMS,
-  ActionType.WEIGHT,
-  ActionType.HYDRATION,
-  ActionType.BLOOD_PRESSURE,
-]);
+const ActionTypeEnumSchema = z.enum(ACTION_TYPE_VALUES);
 
 export const UserPreferencesSchema = z.object({
   enabledActionTypes: z.array(ActionTypeEnumSchema),

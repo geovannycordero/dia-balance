@@ -6,22 +6,15 @@ import { Resend } from 'resend';
 import type { NextAuthOptions } from 'next-auth';
 
 import { prisma } from '@/lib/prisma';
+import { issueVerificationCode } from '@/lib/verification-code';
 
 // Simple dev email provider: log codes to console instead of sending
 function createDevEmailProvider(config: EmailConfig) {
   return EmailProvider({
     ...config,
     async sendVerificationRequest({ identifier: email }) {
-      const code = Math.floor(100000 + Math.random() * 900000).toString();
+      const code = await issueVerificationCode(email);
       const normalizedEmail = email.trim().toLowerCase();
-
-      await prisma.verificationToken.create({
-        data: {
-          identifier: normalizedEmail,
-          token: code,
-          expires: new Date(Date.now() + 10 * 60 * 1000),
-        },
-      });
 
       // Dev-friendly: log code instead of sending real email
       const bar = '\x1b[36m' + '─'.repeat(48) + '\x1b[0m';
@@ -62,16 +55,7 @@ export const authOptions: NextAuthOptions = {
               throw new Error('Resend not configured');
             }
 
-            const code = Math.floor(100000 + Math.random() * 900000).toString();
-            const normalizedEmail = email.trim().toLowerCase();
-
-            await prisma.verificationToken.create({
-              data: {
-                identifier: normalizedEmail,
-                token: code,
-                expires: new Date(Date.now() + 10 * 60 * 1000),
-              },
-            });
+            const code = await issueVerificationCode(email);
 
             const appName = process.env.APP_NAME || 'Dia Balance';
 

@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth/next';
 import { updateActionSchema } from '@/lib/action-schemas';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { deleteObject } from '@/lib/r2';
 
 type RouteParams = {
   params: Promise<{
@@ -64,6 +65,7 @@ export async function PATCH(req: Request, { params }: RouteParams) {
       foodDescription:
         'foodDescription' in data ? (data.foodDescription ?? null) : existing.foodDescription,
       foodCarbs: 'foodCarbs' in data ? (data.foodCarbs ?? null) : existing.foodCarbs,
+      foodImageKey: 'foodImageKey' in data ? (data.foodImageKey ?? null) : existing.foodImageKey,
       exerciseType: 'exerciseType' in data ? (data.exerciseType ?? null) : existing.exerciseType,
       exerciseDuration:
         'exerciseDuration' in data ? (data.exerciseDuration ?? null) : existing.exerciseDuration,
@@ -88,6 +90,10 @@ export async function PATCH(req: Request, { params }: RouteParams) {
           : existing.bloodPressureDiastolic,
     },
   });
+
+  if (existing.foodImageKey && existing.foodImageKey !== updated.foodImageKey) {
+    await deleteObject(existing.foodImageKey);
+  }
 
   return NextResponse.json(updated);
 }
@@ -117,6 +123,10 @@ export async function DELETE(_req: Request, { params }: RouteParams) {
   await prisma.action.delete({
     where: { id },
   });
+
+  if (existing.foodImageKey) {
+    await deleteObject(existing.foodImageKey);
+  }
 
   return NextResponse.json({ success: true });
 }

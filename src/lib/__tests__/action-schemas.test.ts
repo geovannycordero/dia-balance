@@ -1,5 +1,15 @@
-import { ActionType } from '@/app/constants/action-types';
-import { foodSchema, updateActionSchema } from '@/lib/action-schemas';
+import { ActionType, ACTION_TYPE_VALUES } from '@/app/constants/action-types';
+import { ActionTypeSchema, foodSchema, updateActionSchema } from '@/lib/action-schemas';
+
+describe('ActionTypeSchema', () => {
+  it.each(ACTION_TYPE_VALUES)('accepts %s', (value) => {
+    expect(ActionTypeSchema.safeParse(value).success).toBe(true);
+  });
+
+  it('rejects a value outside ACTION_TYPE_VALUES', () => {
+    expect(ActionTypeSchema.safeParse('NOT_A_TYPE').success).toBe(false);
+  });
+});
 
 describe('foodSchema', () => {
   it('accepts a payload without foodCarbs (optional)', () => {
@@ -96,6 +106,31 @@ describe('foodSchema', () => {
     }
   });
 
+  it('accepts a payload without foodImageKey (optional)', () => {
+    const result = foodSchema.safeParse({
+      type: ActionType.FOOD,
+      foodDescription: 'Grilled chicken',
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.foodImageKey).toBeUndefined();
+    }
+  });
+
+  it('accepts a payload with foodImageKey set', () => {
+    const result = foodSchema.safeParse({
+      type: ActionType.FOOD,
+      foodDescription: 'Grilled chicken',
+      foodImageKey: 'food/user-123/abc.jpg',
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.foodImageKey).toBe('food/user-123/abc.jpg');
+    }
+  });
+
   it('rejects when foodDescription is missing regardless of foodCarbs', () => {
     const result = foodSchema.safeParse({
       type: ActionType.FOOD,
@@ -134,6 +169,35 @@ describe('updateActionSchema — foodCarbs', () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.foodCarbs).toBeUndefined();
+    }
+  });
+});
+
+describe('updateActionSchema — foodImageKey', () => {
+  it('accepts a partial update setting foodImageKey', () => {
+    const result = updateActionSchema.safeParse({ foodImageKey: 'food/user-123/abc.jpg' });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.foodImageKey).toBe('food/user-123/abc.jpg');
+    }
+  });
+
+  it('accepts foodImageKey set to null (clearing the photo)', () => {
+    const result = updateActionSchema.safeParse({ foodImageKey: null });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.foodImageKey).toBeNull();
+    }
+  });
+
+  it('allows omitting foodImageKey entirely', () => {
+    const result = updateActionSchema.safeParse({ notes: 'no image field here' });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.foodImageKey).toBeUndefined();
     }
   });
 });

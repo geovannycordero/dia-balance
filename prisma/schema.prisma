@@ -60,6 +60,7 @@ model Action {
 
   foodDescription String?
   foodCarbs       Float?
+  foodImageKey    String?
 
   exerciseType      String?
   exerciseDuration  Int?

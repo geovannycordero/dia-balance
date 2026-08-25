@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth/next';
 import { createActionSchema } from '@/lib/action-schemas';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { getViewUrl } from '@/lib/r2';
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -23,7 +24,15 @@ export async function GET() {
     take: 200,
   });
 
-  return NextResponse.json(actions);
+  const withImageUrls = await Promise.all(
+    actions.map(async (action) =>
+      action.foodImageKey
+        ? { ...action, foodImageUrl: await getViewUrl(action.foodImageKey) }
+        : action,
+    ),
+  );
+
+  return NextResponse.json(withImageUrls);
 }
 
 export async function POST(req: Request) {
@@ -66,6 +75,7 @@ export async function POST(req: Request) {
       medicationDose: 'medicationDose' in data ? (data.medicationDose ?? undefined) : undefined,
       foodDescription: 'foodDescription' in data ? (data.foodDescription ?? undefined) : undefined,
       foodCarbs: 'foodCarbs' in data ? (data.foodCarbs ?? undefined) : undefined,
+      foodImageKey: 'foodImageKey' in data ? (data.foodImageKey ?? undefined) : undefined,
       exerciseType: 'exerciseType' in data ? (data.exerciseType ?? undefined) : undefined,
       exerciseDuration:
         'exerciseDuration' in data ? (data.exerciseDuration ?? undefined) : undefined,

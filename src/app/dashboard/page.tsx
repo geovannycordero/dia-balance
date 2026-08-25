@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth/next';
 import { DashboardClient } from '@/app/dashboard/DashboardClient';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { getViewUrl } from '@/lib/r2';
 import { getUserPreferences } from '@/lib/user-preferences';
 
 export default async function DashboardPage() {
@@ -43,7 +44,19 @@ export default async function DashboardPage() {
   const preferences = getUserPreferences(user ?? { preferences: null });
   const userName = user?.name || session.user.email || 'User';
 
+  const actionsWithImageUrls = await Promise.all(
+    actions.map(async (action) =>
+      action.foodImageKey
+        ? { ...action, foodImageUrl: await getViewUrl(action.foodImageKey) }
+        : action,
+    ),
+  );
+
   return (
-    <DashboardClient initialActions={actions} userName={userName} userPreferences={preferences} />
+    <DashboardClient
+      initialActions={actionsWithImageUrls}
+      userName={userName}
+      userPreferences={preferences}
+    />
   );
 }
