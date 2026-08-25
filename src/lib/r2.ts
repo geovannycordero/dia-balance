@@ -23,6 +23,10 @@ export function buildFoodImageKey(userId: string, extension: string): string {
   return `food/${userId}/${randomUUID()}.${extension}`;
 }
 
+export function isOwnedFoodImageKey(key: string, userId: string): boolean {
+  return key.startsWith(`food/${userId}/`);
+}
+
 export function getUploadUrl(key: string, contentType: string): Promise<string> {
   const command = new PutObjectCommand({ Bucket: bucket, Key: key, ContentType: contentType });
   return getSignedUrl(client, command, { expiresIn: 300 });

@@ -4,7 +4,7 @@ import { PATCH, DELETE } from '../route';
 
 import { ActionType } from '@/app/constants/action-types';
 import { prisma } from '@/lib/prisma';
-import { deleteObject } from '@/lib/r2';
+import { deleteObject, getViewUrl } from '@/lib/r2';
 
 jest.mock('next-auth/next', () => ({
   getServerSession: jest.fn(),
@@ -34,12 +34,15 @@ jest.mock('@/lib/prisma', () => ({
 
 jest.mock('@/lib/r2', () => ({
   deleteObject: jest.fn(),
+  getViewUrl: jest.fn(),
+  isOwnedFoodImageKey: jest.fn((key: string, userId: string) => key.startsWith(`food/${userId}/`)),
 }));
 
 const mockGetServerSession = getServerSession as jest.MockedFunction<typeof getServerSession>;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockPrisma = prisma as any;
 const mockDeleteObject = deleteObject as jest.MockedFunction<typeof deleteObject>;
+const mockGetViewUrl = getViewUrl as jest.MockedFunction<typeof getViewUrl>;
 
 describe('/api/actions/[id]', () => {
   const mockUserId = 'user-123';
@@ -56,6 +59,9 @@ describe('/api/actions/[id]', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mockGetServerSession.mockResolvedValue(mockSession as any);
     mockDeleteObject.mockResolvedValue(undefined);
+    mockGetViewUrl.mockImplementation((key: string) =>
+      Promise.resolve(`https://signed.example.com/${key}`),
+    );
   });
 
   describe('PATCH', () => {
@@ -468,6 +474,64 @@ describe('/api/actions/[id]', () => {
 
       expect(response.status).toBe(200);
       expect(mockDeleteObject).not.toHaveBeenCalled();
+    });
+
+    it('should reject a foodImageKey not scoped to the authenticated user', async () => {
+      const existingAction = {
+        id: mockActionId,
+        userId: mockUserId,
+        type: ActionType.FOOD,
+        timestamp: new Date('2024-01-01'),
+        foodDescription: 'Grilled chicken',
+        foodImageKey: 'food/user-123/old.jpg',
+      };
+
+      mockPrisma.action.findFirst.mockResolvedValue(existingAction);
+
+      const request = new Request('http://localhost/api/actions/123', {
+        method: 'PATCH',
+        body: JSON.stringify({ foodImageKey: 'food/some-other-user/abc.jpg' }),
+      });
+
+      const params = Promise.resolve({ id: mockActionId });
+      const response = await PATCH(request, { params });
+      const data = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(data.error).toBe('Invalid foodImageKey');
+      expect(mockPrisma.action.update).not.toHaveBeenCalled();
+      expect(mockDeleteObject).not.toHaveBeenCalled();
+    });
+
+    it('should attach a signed foodImageUrl to the response when foodImageKey is set', async () => {
+      const existingAction = {
+        id: mockActionId,
+        userId: mockUserId,
+        type: ActionType.FOOD,
+        timestamp: new Date('2024-01-01'),
+        foodDescription: 'Grilled chicken',
+        foodImageKey: 'food/user-123/old.jpg',
+      };
+
+      const updatedAction = {
+        ...existingAction,
+        foodImageKey: 'food/user-123/new.jpg',
+      };
+
+      mockPrisma.action.findFirst.mockResolvedValue(existingAction);
+      mockPrisma.action.update.mockResolvedValue(updatedAction);
+
+      const request = new Request('http://localhost/api/actions/123', {
+        method: 'PATCH',
+        body: JSON.stringify({ foodImageKey: 'food/user-123/new.jpg' }),
+      });
+
+      const params = Promise.resolve({ id: mockActionId });
+      const response = await PATCH(request, { params });
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.foodImageUrl).toBe('https://signed.example.com/food/user-123/new.jpg');
     });
 
     it('should update symptoms action', async () => {

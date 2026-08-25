@@ -35,8 +35,8 @@ const dateTimeFormatter = new Intl.DateTimeFormat('en-GB', {
 
 export function formatDateTimeDDMMYYYY(date: Date | string): string {
   const dateObj = typeof date === 'string' ? new Date(date) : date;
-  // en-GB renders this as "dd/mm/yyyy, HH:mm" — swap the comma for the expected space separator
-  return dateTimeFormatter.format(dateObj).replace(',', '');
+  // en-GB renders this as "dd/mm/yyyy, HH:mm" — normalize the comma+whitespace to a single space
+  return dateTimeFormatter.format(dateObj).replace(/,\s*/, ' ');
 }
 
 /**

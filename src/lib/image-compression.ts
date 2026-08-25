@@ -12,7 +12,10 @@ export function computeTargetDimensions(
   }
 
   const scale = maxDimension / longestSide;
-  return { width: Math.round(width * scale), height: Math.round(height * scale) };
+  return {
+    width: Math.max(1, Math.round(width * scale)),
+    height: Math.max(1, Math.round(height * scale)),
+  };
 }
 
 // ponytail: browser-only APIs (createImageBitmap/canvas) — not unit-tested under jsdom/node,

@@ -24,6 +24,13 @@ describe('issueVerificationCode', () => {
     expect(code).toMatch(/^\d{6}$/);
   });
 
+  it('generates a different code on each call', async () => {
+    const first = await issueVerificationCode('user@example.com');
+    const second = await issueVerificationCode('user@example.com');
+
+    expect(first).not.toBe(second);
+  });
+
   it('stores the code with a normalized (trimmed, lowercased) identifier', async () => {
     const code = await issueVerificationCode('  User@Example.com  ');
 

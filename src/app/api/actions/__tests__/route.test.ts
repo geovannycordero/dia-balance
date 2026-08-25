@@ -4,7 +4,7 @@ import { GET, POST } from '../route';
 
 import { ActionType } from '@/app/constants/action-types';
 import { prisma } from '@/lib/prisma';
-import { getViewUrl } from '@/lib/r2';
+import { getViewUrl, isOwnedFoodImageKey } from '@/lib/r2';
 
 jest.mock('next-auth/next', () => ({
   getServerSession: jest.fn(),
@@ -34,9 +34,13 @@ jest.mock('@/lib/prisma', () => ({
 
 jest.mock('@/lib/r2', () => ({
   getViewUrl: jest.fn(),
+  isOwnedFoodImageKey: jest.fn((key: string, userId: string) => key.startsWith(`food/${userId}/`)),
 }));
 
 const mockGetServerSession = getServerSession as jest.MockedFunction<typeof getServerSession>;
+const mockIsOwnedFoodImageKey = isOwnedFoodImageKey as jest.MockedFunction<
+  typeof isOwnedFoodImageKey
+>;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockPrisma = prisma as any;
 const mockGetViewUrl = getViewUrl as jest.MockedFunction<typeof getViewUrl>;
@@ -665,6 +669,56 @@ describe('/api/actions', () => {
       expect(mockPrisma.action.create).toHaveBeenCalledWith({
         data: expect.objectContaining({ foodImageKey: payload.foodImageKey }),
       });
+    });
+
+    it('should attach a signed foodImageUrl to the response when foodImageKey is set', async () => {
+      const payload = {
+        type: ActionType.FOOD,
+        foodDescription: 'Grilled chicken with vegetables',
+        foodImageKey: 'food/user-123/abc.jpg',
+      };
+
+      const createdAction = {
+        id: 'action-food-image',
+        userId: mockUserId,
+        ...payload,
+        timestamp: new Date(),
+      };
+
+      mockPrisma.action.create.mockResolvedValue(createdAction);
+
+      const request = new Request('http://localhost/api/actions', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+
+      const response = await POST(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(201);
+      expect(data.foodImageUrl).toBe('https://signed.example.com/food/user-123/abc.jpg');
+    });
+
+    it('should reject a foodImageKey not scoped to the authenticated user', async () => {
+      const request = new Request('http://localhost/api/actions', {
+        method: 'POST',
+        body: JSON.stringify({
+          type: ActionType.FOOD,
+          foodDescription: 'Grilled chicken with vegetables',
+          foodImageKey: 'food/some-other-user/abc.jpg',
+        }),
+      });
+
+      const response = await POST(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(data.error).toBe('Invalid foodImageKey');
+      expect(mockIsOwnedFoodImageKey).toHaveBeenCalledWith(
+        'food/some-other-user/abc.jpg',
+        mockUserId,
+      );
+      expect(mockPrisma.action.create).not.toHaveBeenCalled();
     });
 
     it('should reject food action with invalid foodCarbs (non-half-step)', async () => {

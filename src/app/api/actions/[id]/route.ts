@@ -4,7 +4,7 @@ import { getServerSession } from 'next-auth/next';
 import { updateActionSchema } from '@/lib/action-schemas';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { deleteObject } from '@/lib/r2';
+import { deleteObject, getViewUrl, isOwnedFoodImageKey } from '@/lib/r2';
 
 type RouteParams = {
   params: Promise<{
@@ -37,6 +37,10 @@ export async function PATCH(req: Request, { params }: RouteParams) {
   }
 
   const data = parseResult.data;
+
+  if ('foodImageKey' in data && data.foodImageKey && !isOwnedFoodImageKey(data.foodImageKey, userId)) {
+    return NextResponse.json({ error: 'Invalid foodImageKey' }, { status: 400 });
+  }
 
   const existing = await prisma.action.findFirst({
     where: { id, userId },
@@ -95,7 +99,11 @@ export async function PATCH(req: Request, { params }: RouteParams) {
     await deleteObject(existing.foodImageKey);
   }
 
-  return NextResponse.json(updated);
+  const responseBody = updated.foodImageKey
+    ? { ...updated, foodImageUrl: await getViewUrl(updated.foodImageKey) }
+    : updated;
+
+  return NextResponse.json(responseBody);
 }
 
 export async function DELETE(_req: Request, { params }: RouteParams) {

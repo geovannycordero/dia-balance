@@ -24,4 +24,11 @@ describe('computeTargetDimensions', () => {
   it('defaults maxDimension to 1600 when not provided', () => {
     expect(computeTargetDimensions(3200, 1600)).toEqual({ width: 1600, height: 800 });
   });
+
+  it('clamps an extremely thin dimension to at least 1px instead of rounding to 0', () => {
+    const { width, height } = computeTargetDimensions(1, 5000, 1600);
+
+    expect(width).toBeGreaterThanOrEqual(1);
+    expect(height).toBe(1600);
+  });
 });

@@ -235,7 +235,16 @@ export function DashboardClient({
     return formState;
   };
 
+  // Revoking a URL that isn't an object URL we created (e.g. a signed https:// preview) is a
+  // documented no-op, so this is safe to call unconditionally before replacing/clearing the preview.
+  const revokeFoodImagePreview = () => {
+    if (foodImagePreviewUrl) {
+      URL.revokeObjectURL(foodImagePreviewUrl);
+    }
+  };
+
   const resetFoodImageState = () => {
+    revokeFoodImagePreview();
     setFoodImageFile(null);
     setFoodImagePreviewUrl(null);
     setFoodImageRemoved(false);
@@ -250,6 +259,7 @@ export function DashboardClient({
   };
 
   const handleEditAction = (action: ActionWithImage) => {
+    revokeFoodImagePreview();
     setForm(populateFormFromAction(action));
     setError(null);
     setEditingActionId(action.id);
@@ -279,12 +289,14 @@ export function DashboardClient({
       return;
     }
 
+    revokeFoodImagePreview();
     setFoodImageFile(file);
     setFoodImageRemoved(false);
     setFoodImagePreviewUrl(URL.createObjectURL(file));
   };
 
   const handleRemoveFoodImage = () => {
+    revokeFoodImagePreview();
     setFoodImageFile(null);
     setFoodImagePreviewUrl(null);
     setFoodImageRemoved(true);

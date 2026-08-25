@@ -1,7 +1,7 @@
 import { PutObjectCommand, GetObjectCommand, DeleteObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
-import { buildFoodImageKey, getUploadUrl, getViewUrl, deleteObject } from '../r2';
+import { buildFoodImageKey, getUploadUrl, getViewUrl, deleteObject, isOwnedFoodImageKey } from '../r2';
 
 jest.mock('@aws-sdk/client-s3', () => {
   const actual = jest.requireActual('@aws-sdk/client-s3');
@@ -37,6 +37,24 @@ describe('lib/r2', () => {
 
     it('produces a different key on each call', () => {
       expect(buildFoodImageKey('user-123', 'jpg')).not.toBe(buildFoodImageKey('user-123', 'jpg'));
+    });
+  });
+
+  describe('isOwnedFoodImageKey', () => {
+    it('accepts a key scoped under the given user id', () => {
+      expect(isOwnedFoodImageKey('food/user-123/abc.jpg', 'user-123')).toBe(true);
+    });
+
+    it('rejects a key scoped under a different user id', () => {
+      expect(isOwnedFoodImageKey('food/user-456/abc.jpg', 'user-123')).toBe(false);
+    });
+
+    it('rejects a key that only has the user id as a prefix, not a path segment', () => {
+      expect(isOwnedFoodImageKey('food/user-123-evil/abc.jpg', 'user-123')).toBe(false);
+    });
+
+    it('rejects a key outside the food/ prefix entirely', () => {
+      expect(isOwnedFoodImageKey('other/user-123/abc.jpg', 'user-123')).toBe(false);
     });
   });
 
