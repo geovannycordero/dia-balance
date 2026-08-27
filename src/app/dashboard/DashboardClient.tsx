@@ -6,7 +6,9 @@ import type { UserPreferences } from '@/lib/user-preferences';
 import type { Action } from '@prisma/client';
 
 import { ActionType } from '@/app/constants/action-types';
+import { FoodPhotoInput } from '@/components/FoodPhotoInput';
 import { Navigation } from '@/components/Navigation';
+import { PhotoLightbox } from '@/components/PhotoLightbox';
 import { useToast } from '@/components/ToastProvider';
 import {
   ActionTypeSchema,
@@ -81,6 +83,7 @@ export function DashboardClient({
   const [form, setForm] = useState<FormState>(defaultFormState(userPreferences.enabledActionTypes));
   const [editingActionId, setEditingActionId] = useState<string | null>(null);
   const [deletingActionId, setDeletingActionId] = useState<string | null>(null);
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
   const [foodImageFile, setFoodImageFile] = useState<File | null>(null);
   const [foodImagePreviewUrl, setFoodImagePreviewUrl] = useState<string | null>(null);
   const [foodImageRemoved, setFoodImageRemoved] = useState(false);
@@ -577,13 +580,19 @@ export function DashboardClient({
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-start gap-3">
                         {action.foodImageUrl && (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={action.foodImageUrl}
-                            alt="Food"
-                            loading="lazy"
-                            className="h-12 w-12 shrink-0 rounded-lg object-cover"
-                          />
+                          <button
+                            type="button"
+                            onClick={() => setPreviewImageUrl(action.foodImageUrl!)}
+                            className="shrink-0"
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={action.foodImageUrl}
+                              alt="Food"
+                              loading="lazy"
+                              className="h-12 w-12 rounded-lg object-cover"
+                            />
+                          </button>
                         )}
                         <div>
                           <p className="font-medium text-slate-900 dark:text-slate-100">
@@ -758,6 +767,7 @@ export function DashboardClient({
           )}
         </div>
       </main>
+      <PhotoLightbox src={previewImageUrl} onClose={() => setPreviewImageUrl(null)} />
     </>
   );
 }
@@ -1002,31 +1012,11 @@ function renderTypeSpecificFields(
             <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
               Photo (optional)
             </label>
-            {foodImage.previewUrl ? (
-              <div className="mt-1 flex items-center gap-3">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={foodImage.previewUrl}
-                  alt="Food preview"
-                  className="h-16 w-16 rounded-lg object-cover"
-                />
-                <button
-                  type="button"
-                  onClick={foodImage.onRemove}
-                  className="text-xs text-rose-600 hover:text-rose-700 dark:text-rose-400 dark:hover:text-rose-300"
-                >
-                  Remove photo
-                </button>
-              </div>
-            ) : (
-              <input
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                capture="environment"
-                onChange={foodImage.onChange}
-                className="mt-1 w-full text-xs text-slate-700 dark:text-slate-300"
-              />
-            )}
+            <FoodPhotoInput
+              previewUrl={foodImage.previewUrl}
+              onChange={foodImage.onChange}
+              onRemove={foodImage.onRemove}
+            />
           </div>
         </div>
       );
