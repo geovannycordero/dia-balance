@@ -90,9 +90,12 @@ export function DashboardClient({
   const isOnline = useOnlineStatus();
   const { addToast } = useToast();
 
-  useEffect(() => {
+  // Reset local state when the server sends fresh actions (adjust-state-during-render pattern)
+  const [prevInitialActions, setPrevInitialActions] = useState(initialActions);
+  if (initialActions !== prevInitialActions) {
+    setPrevInitialActions(initialActions);
     setActions(initialActions);
-  }, [initialActions]);
+  }
 
   // Sync any pending actions when we come back online
   useEffect(() => {
