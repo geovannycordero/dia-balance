@@ -39,7 +39,7 @@
     "zod": "^4.4.3"
   },
   "resolutions": {
-    "@hono/node-server": ">=2.1.0",
+    "@hono/node-server": ">=2.1.6",
     "@babel/core": "^7.29.6",
     "@eslint/eslintrc/js-yaml": "^4.3.1",
     "@istanbuljs/load-nyc-config/js-yaml": "^3.15.1",
